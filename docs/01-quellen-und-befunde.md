@@ -96,10 +96,45 @@ Vorrat gebaut.
 | `09` | 35 | Ticks pro Zeile | Werte 4–10 |
 | `10` | 3 | SysEx-Dump senden | genau einmal je Datei, Datenbyte = Dump-Nummer |
 
-### 3.2 Offene Punkte, die geklärt werden müssen
+### 3.2 Befehl 05/00: der Controller-Mechanismus — GEKLÄRT
+
+Aus der OctaMED-SoundStudio-Dokumentation („The MIDI Cmd 3cxx Window",
+amdetails.html), wörtlich:
+
+> „Using a combination of player command types 05 and 00, you can set any MIDI
+> controller you choose. Command 05's level is the controller number, command
+> 00's the controller value. So if OctaMED came across this in a song:
+> `00509` / `00004` then OctaMED would set MIDI controller number 9 to 4."
+
+An den echten Dateien bestätigt: `05 4A` setzt CC74 (Filter-Cutoff), danach
+liefert `00 xx` die Werte als glatten Verlauf (64, 66, 68, 70 …).
+
+Die Befehle `31`–`3F` sind die Ein-Zeilen-Abkürzung desselben: Controller-
+Nummer und -Typ (Standard/RPN/NRPN, MSB/LSB) stehen in `MMDMIDICmd3x`.
+
+**Messfehler, der dabei auffiel:** Eine erste Befehlsstatistik hatte Befehl `00`
+übersprungen (Filter `if cmd != 0`) und damit die Controller-*Werte* nicht
+gesehen — allein in `unsere_hände_spielen.MMD` 2 092 Ereignisse. Befehl `00` mit
+Datenbyte ≠ 0 ist ein echter Befehl und darf nicht als „leer" behandelt werden.
+
+**Lücke in Tutka:** `commandconversion[5] = CommandNotDefined`. Tutka kennt die
+Controller-*Nummer* nicht, verarbeitet aber `00` als Controller-*Wert* — es
+sendet also Werte ohne zu wissen, wohin. Filterverläufe landen beim falschen
+Controller.
+
+### 3.3 Offene Punkte, die geklärt werden müssen
 
 1. **Befehl `0x17` (2 485-mal).** Bei Tutka `CommandNotDefined`, bei OpenMPT
-   gar nicht vorhanden. Messung: Datenbytes `0x00`–`0x7F`, alle 128 Werte
+   gar nicht vorhanden. In keiner gefundenen Dokumentation beschrieben.
+
+   **Hypothese (nicht belegt):** `0x17` ist die MIDI-Lautstärke CC7, und
+   Tutkas Tabelle ist an dieser Stelle um eins verschoben. Indizien:
+   Tutka ordnet CC7 dem Befehl `0x16` zu; die fünf Dateien benutzen `0x17`
+   2 485-mal und `0x16` kein einziges Mal; Tutkas Tabelle hat bei Index 5
+   nachweislich einen Fehler (siehe 3.2); das Messprofil — pro Spur eigener
+   Wert, 0x00–0x7F voll ausgeschöpft, glatte Verläufe, ohne Note — passt auf
+   eine kanalweise Lautstärke.
+   Nicht als Tatsache in den Code übernehmen, bevor es im Emulator geprüft ist. Messung: Datenbytes `0x00`–`0x7F`, alle 128 Werte
    belegt, dichte gleitende Verteilung, zu 0–12 % mit Note kombiniert, fast
    immer ohne Instrumentangabe (spurbezogen). Das Profil ist eindeutig ein
    **kontinuierlicher Controller-Verlauf**. Welcher, ist noch offen.

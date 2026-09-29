@@ -103,9 +103,20 @@ Vorrat gebaut.
    belegt, dichte gleitende Verteilung, zu 0–12 % mit Note kombiniert, fast
    immer ohne Instrumentangabe (spurbezogen). Das Profil ist eindeutig ein
    **kontinuierlicher Controller-Verlauf**. Welcher, ist noch offen.
+   Fundstellen für die Klärung im Emulator: `O_Wie_Eine_Marionette.MMD`,
+   Block 4, ab Zeile 1 — gleichzeitig auf Spur 2, 7, 10 und 14 mit je eigenem
+   Wert (`58`, `7F`, `7F`, `70`).
 2. **Befehl `0x05` (25-mal).** Ebenfalls bei Tutka undefiniert. OpenMPT deutet
    es sample-seitig als Tone-Portamento + Volume-Slide, was MIDI-seitig nicht
    passt.
+   Fundstellen: `unsere_hände_spielen.MMD`, Blöcke 7–12 jeweils Zeile 0, immer
+   `054A` zusammen mit einer Note auf Instrument 5
+   (`MidiControlChannel_FilterDistSound`).
+
+   **Klärungsweg:** Der Autor kann beide Songs im Amiga-Emulator öffnen und die
+   Befehlsbedeutung direkt in OctaMED nachschlagen. Das ist die verlässlichste
+   Quelle — verlässlicher als beide C-Portierungen, die den Befehl nicht
+   kennen.
 3. **Velocity-Überlauf.** Tutka rechnet `value * 0x80 / 0x60`. Bei gemessenen
    Werten bis `0x6F` ergibt das 148 — über 127. Muss begrenzt werden.
 4. **`0x10`-Datenbyte.** Werte 0 und 1 beobachtet. Ob 0- oder 1-basiert
@@ -122,10 +133,18 @@ Vorrat gebaut.
 - **Kein einziger Programmwechsel.** `midipreset` und `long_midi_preset` sind
   überall 0. Die Klangzuordnung steckt **ausschließlich in den SysEx-Dumps**.
   Der Export kann keine Programmwechsel aus Instrumentdaten erzeugen.
-- **Geteilte MIDI-Kanäle sind Absicht.** Instrumentnamen wie
-  `MidiControlChannel_OrganBass` (Lautstärke 0) liegen auf demselben Kanal wie
-  `OrganBass`. Das sind bewusste Controller-Spuren, keine Fehler. Die Warnung
-  muss das als Muster erkennen, statt es als Kollision zu melden.
+- **Jedes klingende Instrument hat seinen eigenen MIDI-Kanal.** Gemessen über
+  alle fünf Dateien: **null** Kanäle mit zwei klingenden Instrumenten. Vom
+  Autor bestätigt. Die im Projekt-Prompt formulierte Sorge über geteilte Kanäle
+  trifft auf dieses Material nicht zu.
+  Doppelbelegungen kommen vor, aber ausnahmslos als Paar aus einem klingenden
+  Instrument und einem mit Lautstärke 0, das der Autor `MidiControlChannel_…`
+  genannt hat — bewusste Controller-Spuren.
+  **Folge für die Warnung:** Sie darf nur bei zwei *klingenden* Instrumenten auf
+  einem Kanal anschlagen. Das Controller-Paar wird als Muster erkannt und als
+  Information gezeigt, nicht als Problem.
+- **Note-Off über Pattern-Befehl ist bestätigt.** Der Autor: „für das Noteoff
+  gab es immer einen pattern-befehl" — deckt sich mit `0F FF`.
 - **Spurbreite wechselt je Block** (z. B. 4 bis 20 Spuren in einer Datei). Die
   Pattern-Ansicht darf keine feste Spaltenzahl annehmen.
 - **Zusätzliche Befehlsseiten kommen vor** (eine Datei hat eine). Müssen von

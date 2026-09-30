@@ -112,6 +112,11 @@ final class Store {
         position.zeile = max(0, min(b.zeilen - 1, position.zeile + delta))
     }
 
+    /// Bild auf/ab springt um vier Beats, nicht um eine feste Zeilenzahl.
+    var seitenSprung: Int {
+        max(1, (aktiv?.song.zeilenProBeat ?? 4) * 4)
+    }
+
     // MARK: - Zeitrechnung
 
     /// Dauer einer Zeile in Sekunden.

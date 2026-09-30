@@ -76,6 +76,19 @@ enum Testmaterial {
     #expect(TempoSonderfall(daten: 0x40) == .tempoSetzen(0x40))
 }
 
+@Test func velocityAbbildung() {
+    // Standard ist Skalierung: 0-64 -> 0-127, laut Handbuch und Autor.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 64) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 32) == 64)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0) == 0)
+    // Werte über 64 saettigen — in zwei Testdateien betrifft das drei Viertel
+    // aller Velocities.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 96) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 127) == 127)
+    // Der andere Weg bleibt waehlbar, bis der Emulator entscheidet.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 64, abbildung: .durchreichen) == 64)
+}
+
 @Test func svolNachMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(Befehlskatalog.midiLautstärke(ausSvol: 47) == 94)

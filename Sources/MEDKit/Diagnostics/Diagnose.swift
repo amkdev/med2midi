@@ -45,7 +45,7 @@ public struct Warnung: Sendable, CustomStringConvertible {
         case .kanalKollision(let k, let i):
             text = "MIDI-Kanal \(k): mehrere klingende Instrumente \(i)"
         case .velocityÜberBereich(let w):
-            text = "Velocity über \(w) — ausserhalb des MIDI-Bereichs"
+            text = "Velocity-Werte über \(w): werden beim Skalieren alle zu 127 (Dynamik geht verloren)"
         case .modlenStimmtNicht(let m, let d):
             text = "modlen \(m) weicht von der Dateigröße \(d) ab"
         case .instrExtUngewöhnlich(let g):

@@ -44,7 +44,7 @@ extension MEDLoader {
                         case .ohneWirkungBeiMIDI:
                             ohneWirkung[b.nummer, default: 0] += 1
                         case .velocity:
-                            if b.daten > 127 { velocityÜber += 1 }
+                            if b.daten > 64 { velocityÜber += 1 }
                         case .freierController:
                             if cmd3x.isEmpty { cmd3xFehlt.insert(b.nummer) }
                         default: break
@@ -71,7 +71,7 @@ extension MEDLoader {
         }
         if velocityÜber > 0 {
             diagnose.warnungen.append(Warnung(
-                art: .velocityÜberBereich(wert: 127),
+                art: .velocityÜberBereich(wert: 64),
                 fundstellen: fundstellen[0x0C] ?? [], anzahl: velocityÜber))
         }
 

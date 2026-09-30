@@ -8,6 +8,7 @@ import MEDKit
 /// Befehl (2) und Datenbyte (2) — zum Beispiel `E-5 A0000`.
 struct PatternAnsicht: View {
     @Environment(Store.self) private var store
+    @FocusState private var hatFokus: Bool
     let song: Song
     let block: Block
 
@@ -40,6 +41,27 @@ struct PatternAnsicht: View {
         }
         .font(.system(size: 11, weight: .regular, design: .monospaced))
         .background(Color.black)
+        // Tastaturbedienung: die Ansicht muss fokussierbar sein, sonst
+        // bekommt sie keine Tastendrücke.
+        .focusable()
+        .focusEffectDisabled()
+        .focused($hatFokus)
+        .onAppear { hatFokus = true }
+        .onTapGesture { hatFokus = true }
+        .onKeyPress(.upArrow)    { store.zeileVerschieben(-1); return .handled }
+        .onKeyPress(.downArrow)  { store.zeileVerschieben(1);  return .handled }
+        .onKeyPress(.pageUp)     { store.zeileVerschieben(-store.seitenSprung); return .handled }
+        .onKeyPress(.pageDown)   { store.zeileVerschieben(store.seitenSprung);  return .handled }
+        .onKeyPress(.home)       { store.position.zeile = 0; return .handled }
+        .onKeyPress(.end)        { store.position.zeile = max(0, block.zeilen - 1); return .handled }
+        .onKeyPress(.leftArrow)  { store.weiterInSongreihenfolge(-1); return .handled }
+        .onKeyPress(.rightArrow) { store.weiterInSongreihenfolge(1);  return .handled }
+        .onKeyPress(.tab) {
+            if block.seitenAnzahl > 1 {
+                store.position.seite = (store.position.seite + 1) % block.seitenAnzahl
+            }
+            return .handled
+        }
     }
 
     private var kopfzeile: some View {
@@ -80,7 +102,7 @@ struct PatternAnsicht: View {
                        : (istBeat ? Color.white.opacity(0.06) : Color.clear)
         )
         .contentShape(Rectangle())
-        .onTapGesture { store.position.zeile = zeile }
+        .onTapGesture { store.position.zeile = zeile; hatFokus = true }
     }
 
     private func zelleAnsicht(zeile: Int, spur: Int) -> some View {

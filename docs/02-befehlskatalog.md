@@ -133,20 +133,17 @@ Tutka hat CC7 also um genau eine Stelle zu tief eingeordnet.
 `1A`/`1B` Lautstärke einmalig auf/ab · `1E` Zeile wiederholen ·
 `20`–`2F` Mix-Modus (für dieses Projekt ohne Belang)
 
-## Geklärt: der Wertebereich von Befehl `0C` (Velocity)
+## Befehl `0C` (Velocity): Skalierung, mit dokumentiertem Widerspruch
 
-Zunächst falsch umgesetzt (Verdopplung), dann gemessen und entschieden.
+**Umsetzung: 0–64 → 0–127, also verdoppeln und bei 127 begrenzen.**
+Quellen dafür: das Handbuch („The normal Amiga sample volume range of 0 - 64 is
+converted to the MIDI range of 0 - 127"), Tutka (mit anderem Faktor) und der
+Autor selbst: 64 ist die Maximallautstärke der MIDI-Instrumente, nicht die
+halbe.
 
-| Quelle | Aussage |
-|---|---|
-| Handbuch, `0C` (MIDI) | „The normal Amiga sample volume range of 0 - 64 is converted to the MIDI range of 0 - 127." |
-| Tutka `conversion.cpp` | „MIDI volumes are in range 0-95 in OctaMED", `wert * 0x80 / 0x60` |
-| **Messung an 7 Dateien** | Werte bis exakt 127, nie darüber |
-
-**Entscheidend ist die Verteilung.** Die häufigsten Werte liegen in fast allen
-Dateien auf dem 16er-Raster **16, 32, 48, 64, 80, 96, 112** — acht Stufen über
-0–127. In einem 0–64-Bereich wäre das natürliche Raster 8/16/24/…/64, und 80,
-96, 112 gäbe es nicht.
+**Der Widerspruch dazu, festgehalten:** In allen sieben Dateien kommen Werte bis
+127 vor, und die häufigsten liegen auf dem 16er-Raster 16/32/48/64/80/96/112 —
+acht Stufen über 0–127.
 
 | Datei | ≤ 64 | häufigste Werte |
 |---|---|---|
@@ -158,22 +155,30 @@ Dateien auf dem 16er-Raster **16, 32, 48, 64, 80, 96, 112** — acht Stufen übe
 | `sehnsuchts_blues.MMD1.pp` | 84 % | 48, 64, 80, 96, 16, 32 |
 | `unsere_hände_spielen.MMD` | 84 % | 32, 48, 16, 64, 80, 96 |
 
-Bei den beiden `final_`-Dateien liegen drei Viertel aller Velocities über 64.
-Mit Skalierung würden 64, 80, 96 und 112 **alle zu 127** — beide Stücke hätten
-keinerlei Dynamik mehr. Das kann nicht sein, was der Autor gehört hat.
+Bei den beiden `final_`-Dateien liegen drei Viertel aller Velocities über 64;
+beim Skalieren werden sie alle zu 127. Diese Stücke wären oberhalb von 64
+dynamisch flach.
 
-Gegenprobe zur Vollständigkeit: Die hohen Werte stehen auf MIDI-Instrumenten,
-nicht auf Sample-Instrumenten (getrennt gemessen über das auf der Spur aktive
-Instrument). Und `FLAG_VOLHEX` (0x10) ist reine Anzeigesache — Dateien mit und
-ohne gesetztes Flag zeigen dieselben Wertebereiche.
+Beide Lesarten sind mit den Daten verträglich: Entweder OctaMED sättigt
+tatsächlich, und der Autor hat die Werte ohne hörbaren Unterschied gesetzt —
+oder es reicht durch. Die Schwäche des Daten-Arguments ist, dass es
+unterstellt, jeder gesetzte Wert sei bewusst gewählt worden; der Autor weist
+selbst darauf hin, dass die Songs von Hand programmiert wurden und Fehler
+enthalten.
 
-**Umsetzung:** durchreichen, bei 127 begrenzt
-(`Befehlskatalog.velocity(ausBefehlsdaten:)`).
+**Entscheidbar am Original:** eine Note mit `0C40` auf ein MIDI-Instrument,
+MIDI-Ausgang mitschneiden, Velocity ablesen. 127 bestätigt die Skalierung,
+64 das Durchreichen.
 
-Davon zu trennen und ebenfalls belegt: die Instrument-Grundlautstärke `svol`
-(0–64) wird verdoppelt und bei 127 gedeckelt — das zeigt das undokumentierte
-Feld der 24-Byte-`InstrExt` (47→94, 49→98, 48→96, 64→127, 32→64, 50→100).
-Zwei verschiedene Größen, nicht zu verwechseln.
+Bis dahin gilt die Angabe des Autors. Die Alternative bleibt wählbar:
+`Befehlskatalog.velocity(ausBefehlsdaten:abbildung:)` mit `.durchreichen`.
+Die Diagnose meldet Werte über 64, weil dort Dynamik verloren geht.
+
+Davon zu trennen und unabhängig belegt: die Instrument-Grundlautstärke `svol`
+(0–64) wird ebenfalls verdoppelt und bei 127 gedeckelt — das zeigt das
+undokumentierte Feld der 24-Byte-`InstrExt` (47→94, 49→98, 48→96, 64→127,
+32→64, 50→100). **Dass genau diese Größe verdoppelt wird, stützt die
+Skalierung auch für `0C`.**
 
 ## Sample-Instrumente kommen vor — anders als im Projekt-Prompt angenommen
 

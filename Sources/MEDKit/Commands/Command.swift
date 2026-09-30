@@ -179,29 +179,36 @@ public enum Befehlskatalog {
         }
     }
 
+    /// Wie das Datenbyte von Befehl `0C` in MIDI-Velocity umgerechnet wird.
+    public enum VelocityAbbildung: Sendable {
+        /// 0–64 → 0–127 (verdoppeln, bei 127 begrenzen). Handbuch und Autor.
+        case skalieren
+        /// Wert unverändert, bei 127 begrenzt.
+        case durchreichen
+    }
+
     /// Velocity aus dem Datenbyte des Befehls `0C`.
     ///
-    /// **Offen — die Quellen widersprechen sich und den Daten.**
-    /// - Handbuch, Befehl 0C (MIDI): "The normal Amiga sample volume range of
-    ///   0 - 64 is converted to the MIDI range of 0 - 127."
-    /// - Tutka `conversion.cpp`: "MIDI volumes are in range 0-95 in OctaMED",
-    ///   gerechnet `wert * 0x80 / 0x60`.
-    /// - Gemessen in allen sieben Testdateien: Werte bis **exakt 127**, nie
-    ///   darüber. Maxima je Datei 96, 100, 111, 112, 127. Wäre der gespeicherte
-    ///   Wert der Amiga-Bereich 0–64, könnten 111 oder 127 nicht vorkommen;
-    ///   eine Verdopplung ergäbe 254.
+    /// Handbuch, Befehl 0C (MIDI): "The normal Amiga sample volume range of
+    /// 0 - 64 is converted to the MIDI range of 0 - 127." Der Autor bestätigt
+    /// das aus der Erinnerung: 64 ist die Maximallautstärke, nicht die halbe.
     ///
-    /// Bis das geklärt ist, wird der Wert durchgereicht und bei 127 begrenzt.
-    /// Das ist an den Extremen nachweislich richtig und verliert keine
-    /// Information; eine Skalierung wäre an beiden Enden falsch, wenn die
-    /// Annahme nicht stimmt.
+    /// **Widerspruch zu den Daten, festgehalten:** In allen sieben Testdateien
+    /// kommen Werte bis 127 vor, und die häufigsten liegen auf dem 16er-Raster
+    /// 16/32/48/64/80/96/112. Bei `final_manchmaltriffteinlächeln2001.med` und
+    /// `final_soverloren.med` liegen drei Viertel der Werte über 64 und werden
+    /// beim Skalieren alle zu 127 — beide Stücke wären oberhalb von 64
+    /// dynamisch flach.
     ///
-    /// **Klärung:** Im Emulator eine Note mit `0C40` auf ein MIDI-Instrument
-    /// setzen, MIDI-Ausgang mitschneiden und die gesendete Velocity ablesen.
-    /// Ergibt das 64, ist die Durchreichung richtig; ergibt es 85 oder 127,
-    /// wird skaliert. Siehe docs/02-befehlskatalog.md.
-    public static func velocity(ausBefehlsdaten wert: UInt8) -> UInt8 {
-        min(wert, 127)
+    /// Auflösbar ist das nur am Original: eine Note mit `0C40` setzen,
+    /// MIDI-Ausgang mitschneiden, Velocity ablesen. 127 bestätigt die
+    /// Skalierung, 64 das Durchreichen. Bis dahin gilt die Angabe des Autors.
+    public static func velocity(ausBefehlsdaten wert: UInt8,
+                                abbildung: VelocityAbbildung = .skalieren) -> UInt8 {
+        switch abbildung {
+        case .skalieren:    return UInt8(min(Int(wert) * 2, 127))
+        case .durchreichen: return min(wert, 127)
+        }
     }
 
     /// Instrument-Grundlautstärke `svol` (0–64) in den MIDI-Bereich.

@@ -16,27 +16,36 @@ struct PatternAnsicht: View {
     private let zeilenNrBreite: CGFloat = 46
     private let spurBreite: CGFloat = 86
 
+    /// Kopfzeile und Datenzeilen müssen exakt gleich breit sein, sonst
+    /// zentriert die HStack im breiteren Fenster und die Spalten stehen
+    /// versetzt.
+    private var gesamtBreite: CGFloat {
+        zeilenNrBreite + spurBreite * CGFloat(block.spuren)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            kopfzeile
-            Divider()
-            ScrollViewReader { proxy in
-                ScrollView([.vertical, .horizontal]) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+        ScrollViewReader { proxy in
+            ScrollView([.vertical, .horizontal]) {
+                LazyVStack(alignment: .leading, spacing: 0,
+                           pinnedViews: [.sectionHeaders]) {
+                    Section {
                         ForEach(0..<block.zeilen, id: \.self) { zeile in
                             zeilenAnsicht(zeile)
                                 .id(zeile)
                         }
+                    } header: {
+                        kopfzeile
                     }
                 }
+                .frame(width: gesamtBreite, alignment: .leading)
+            }
                 .onChange(of: store.position.zeile) { _, neu in
                     withAnimation(.linear(duration: 0.08)) {
                         proxy.scrollTo(neu, anchor: .center)
                     }
                 }
-                .onChange(of: store.position.block) { _, _ in
-                    proxy.scrollTo(0, anchor: .top)
-                }
+            .onChange(of: store.position.block) { _, _ in
+                proxy.scrollTo(0, anchor: .top)
             }
         }
         .font(.system(size: 11, weight: .regular, design: .monospaced))
@@ -80,8 +89,10 @@ struct PatternAnsicht: View {
                 .frame(width: spurBreite)
             }
         }
+        .frame(width: gesamtBreite, alignment: .leading)
         .padding(.vertical, 3)
         .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     private func zeilenAnsicht(_ zeile: Int) -> some View {
@@ -96,7 +107,7 @@ struct PatternAnsicht: View {
                     .frame(width: spurBreite, alignment: .leading)
             }
         }
-        .frame(height: zeilenHöhe)
+        .frame(width: gesamtBreite, height: zeilenHöhe, alignment: .leading)
         .background(
             istAktuell ? Color.accentColor.opacity(0.35)
                        : (istBeat ? Color.white.opacity(0.06) : Color.clear)

@@ -152,7 +152,8 @@ struct Hauptansicht: View {
 
     private var positionsanzeige: some View {
         HStack(spacing: 10) {
-            beschriftet("Zeile", String(format: "%03d", store.position.zeile))
+            beschriftet("Zeile", String(format: "%03d / %03d", store.position.zeile,
+                                        max(0, (store.aktiverBlock?.zeilen ?? 1) - 1)))
             beschriftet("Takt.Beat", store.taktUndBeat)
             beschriftet("Zeit", store.zeitImBlock)
         }

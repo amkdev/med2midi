@@ -66,3 +66,10 @@ Zeile 0, Spur 6 (`D-4 6 0FFF`).
   mit 127? Das prüft, ob `17` ebenfalls skaliert oder durchreicht.
 - **Befehl `0x05`/`0x00`**: `--- 1 054A` gefolgt von `--- 1 0040` — kommt
   `CC 74` mit Wert 64?
+- **Instrumentnummer ohne Note**: In eine Spur eine Note mit Instrument 1
+  setzen, darunter eine Zelle mit *nur* Instrument 2 (Kanal 2), darunter
+  `--- 1740`. Geht `CC 7` an Kanal 1 oder Kanal 2? Das klärt, ob eine
+  Instrumentzelle ohne Note den Kanalbezug schon verschiebt.
+- **Löschverhalten**: Eine Note mit Instrument setzen, dann nur die Note
+  löschen — bleibt die Instrumentnummer stehen? Das würde die tausenden
+  Zellen erklären (siehe `02-befehlskatalog.md`).

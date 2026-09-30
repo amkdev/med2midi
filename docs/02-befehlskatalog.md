@@ -298,3 +298,48 @@ abgeschnitten — genau der Fehler, den der Autor damals umgangen hat.
 Ebenfalls zu beachten: Eine Zelle kann Note **und** `0F FF` zugleich tragen
 (Block 27, Zeile 0, Spur 6: `D-4 6 0FFF`). Die Reihenfolge — erst alte Note
 beenden, dann neue spielen — ist noch nicht am Original geprüft.
+
+## Instrumentnummer ohne Note — vermutlich Editier-Überbleibsel
+
+In den Pattern-Daten stehen tausende Zellen, die eine Instrumentnummer tragen,
+aber keine Note. Vermutung des Autors: Beim Löschen einer Note in OctaMED blieb
+die Instrumentnummer stehen.
+
+Gemessen, zwei Sorten:
+
+| Datei | nur Instrument | davon **mit** Befehl | „rein" |
+|---|---|---|---|
+| `O_Wie_Eine_Marionette.MMD` | **0** | — | **0** |
+| `N_ich_will_neues.mmd1` | 4167 | 3691 | 476 |
+| `sehnsuchts_blues.MMD1.pp` | 1321 | 343 | 978 |
+| `unsere_hände_spielen.MMD` | 1986 | 4 | 1982 |
+| `N_WOISTDAS_MU80.med` | 2792 | 124 | 2668 |
+| `final_manchmaltriffteinlächeln2001.med` | 4001 | 52 | 3949 |
+| `final_soverloren.med` | 3387 | 11 | 3376 |
+
+**Instrument mit Befehl** ist Absicht: So zielt man einen Befehl auf einen
+bestimmten Kanal, ohne eine Note zu spielen. Bei `N_ich_will_neues.mmd1` sind
+das 3691 von 4167 Fällen.
+
+**Instrument ohne alles** stützt die Vermutung des Autors:
+
+- **Keine einzige Spur** trägt die Nummer durchgehend (0 von 44, 0 von 84 …).
+  Eine Automatik des Programms würde durchlaufen.
+- `O_Wie_Eine_Marionette.MMD` hat **null** solcher Zellen. Wäre es
+  Programmverhalten, müsste es dort ebenso auftreten.
+- Nur 15–38 % stehen direkt hinter einer Note; der Rest sitzt verstreut.
+
+### Folge für die Player-Simulation — geprüft, unkritisch
+
+Eine Instrumentzelle ändert den Instrumentbezug der Spur und damit potenziell
+den Kanal, auf den `17`, `0A` und `0D` wirken. Ein Überbleibsel könnte also
+einen Controller auf den falschen Kanal leiten.
+
+Gemessen: In allen sieben Dateien **null Fälle**, in denen eine reine
+Instrumentzelle den Kanal wechselt und danach ein kanalbezogener Befehl folgt.
+Kanalwechsel durch solche Zellen gibt es (290, 9, 2), aber nie mit Folgen.
+
+**Offen:** Ob OctaMED den „most recently used channel" bereits beim Schreiben
+der Instrumentnummer setzt oder erst beim Spielen einer Note. Da es in diesem
+Material nirgends greift, ist es nicht dringend — für einen vollständigen
+Export aber zu klären.

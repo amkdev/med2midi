@@ -310,6 +310,24 @@ Randnotiz: `i_ext_entrsz` ist in **allen** Dateien 42, die Spezifikation
 dokumentiert 40 (`name[40]`). Diese zwei Zusatzbytes schreibt auch die
 Amiga-Version; sie taugen nicht zur Unterscheidung.
 
+**Gemessen:** Sie sind in allen fünf Dateien, bei jedem Instrument,
+durchgehend `00 00`. Keine Information. Die naheliegende Erklärung: `name[40]`
+soll nullterminiert sein — bei 40 Zeichen bliebe kein Platz dafür, also 41
+Bytes, aufgerundet auf 42 wegen der Regel „always align everything to even
+boundaries".
+
+Die Vermutung, hier seien Bytes für neue Befehle hinzugekommen, trägt nicht.
+**Neue Befehle brauchen keinen zusätzlichen Platz:** Ab MMD1 ist das
+Befehlsfeld der Note ein volles Byte (`cccccccc`), benutzt sind `00`–`3F` —
+Raum für 192 weitere ohne jede Strukturänderung. In MMD0 hatte der Befehl nur
+4 Bit; genau das nennt Kinnunen als Grund für MMD1.
+
+Vorgesehene Erweiterungsstellen im Format sind stattdessen:
+`MMDMIDICmd3x.num_of_settings` („currently set to 15 … could be > 15 in the
+future"), die `BlockCmdPageTable` für mehrere Befehle je Note, und
+`s_ext_entrsz` für Instrumentfelder — wo die Windows-Version auch tatsächlich
+erweitert hat.
+
 ### Der `InstrExt`-Zusatz in der MMD3-Datei — entschlüsselt
 
 Die sechs Bytes jenseits der dokumentierten 18 sind nicht leer. Byte 19

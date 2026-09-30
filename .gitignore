@@ -1,9 +1,9 @@
-.DS_Store
-.build/
-.swiftpm/
-DerivedData/
-*.xcuserstate
-xcuserdata/
 
+.build/
+.DS_Store
+.swiftpm/
+*.xcuserstate
 # Songdateien werden bewusst nicht versioniert (privates Material)
+DerivedData/
 songs/
+xcuserdata/

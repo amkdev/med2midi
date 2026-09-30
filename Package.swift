@@ -7,10 +7,12 @@ let package = Package(
     products: [
         .library(name: "MEDKit", targets: ["MEDKit"]),
         .executable(name: "medprobe", targets: ["medprobe"]),
+        .executable(name: "MED2MIDI", targets: ["MED2MIDI"]),
     ],
     targets: [
         .target(name: "MEDKit"),
         .executableTarget(name: "medprobe", dependencies: ["MEDKit"]),
+        .executableTarget(name: "MED2MIDI", dependencies: ["MEDKit"]),
         .testTarget(name: "MEDKitTests", dependencies: ["MEDKit"]),
     ]
 )

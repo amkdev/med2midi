@@ -207,3 +207,61 @@ polyphonen Aftertouch mit Wert 15 gesendet — praktisch unhörbar.
 
 Die Diagnose meldet solche Fälle: ein Befehl mit sehr wenigen, kleinen Werten
 passt oft nicht zu seiner MIDI-Bedeutung.
+
+## Notenlängen: Hold, `0F FF` und Blockgrenzen
+
+Der im Projekt-Prompt als kritisch markierte Punkt. Stand nach Messung und
+Auskunft des Autors.
+
+### Hold ist in Ticks
+
+> „You can change the default note length (**in ticks**) for an instrument by
+> setting the Hold value in the instrument properties window… The default note
+> length is usually zero, which means **play until a stop message is sent**."
+
+Beispiel aus derselben Quelle: bei 4 Zeilen pro Beat und 6 Ticks pro Zeile
+ergibt `hold = 6` eine Notenlänge von einer Zeile, also einem Viertelbeat.
+
+Das Handbuch (Anhang A, Befehl 08 MIDI) ergänzt: „the whole command level can be
+used to set hold. So hold values above 15 are possible (right up to 255)."
+Decay gibt es bei MIDI nicht — „because with MIDI, the volume of an already
+played note can't be altered".
+
+### Zwei Wege zum Notenende, sauber getrennt
+
+Gegenprobe über alle sieben Dateien: `0F FF` steht fast ausschließlich auf
+Spuren, deren Instrument `hold = 0` hat.
+
+| Datei | `0FFF` bei `hold = 0` | bei `hold > 0` |
+|---|---|---|
+| `N_ich_will_neues.mmd1` | 1538 | 3 |
+| `sehnsuchts_blues.MMD1.pp` | 69 | 2 |
+| `O_Wie_Eine_Marionette.MMD` | 61 | 5 |
+| `final_soverloren.med` | 50 | 32 |
+| `unsere_hände_spielen.MMD` | 37 | 4 |
+| `N_WOISTDAS_MU80.med` | 44 | 1 |
+| `final_manchmaltriffteinlächeln2001.med` | 36 | 0 |
+
+- `hold > 0` → die Länge steht fest, kein Befehl nötig.
+- `hold = 0` → die Note klingt, bis ein `0F FF` kommt.
+
+### Note-Offs stehen im *nächsten* Block
+
+Auskunft des Autors:
+
+> „das mit dem noteoff in der nächsten pattern hat einen grund. wenn ich sie
+> ganz am schluss als letzten befehl genutzt hätte, wäre die note vor dem ende
+> der pattern beendet worden"
+
+Ein `0F FF` in Zeile 0 eines Blocks beendet also die Note aus dem **vorigen**
+Block. Beispiel `final_soverloren.med`, Block 27: Zeile 0 trägt `0FFF` auf acht
+Spuren gleichzeitig.
+
+**Folge für die Player-Simulation (Phase 2):** Blöcke dürfen nicht einzeln
+betrachtet werden. Die Simulation läuft die Songreihenfolge durch und führt
+offene Noten über Blockgrenzen mit. Sonst werden lange Töne am Blockende
+abgeschnitten — genau der Fehler, den der Autor damals umgangen hat.
+
+Ebenfalls zu beachten: Eine Zelle kann Note **und** `0F FF` zugleich tragen
+(Block 27, Zeile 0, Spur 6: `D-4 6 0FFF`). Die Reihenfolge — erst alte Note
+beenden, dann neue spielen — ist noch nicht am Original geprüft.

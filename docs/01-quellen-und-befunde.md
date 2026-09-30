@@ -246,7 +246,63 @@ Die Pattern-Ansicht bildet das nach.
   `deftempo = 66` und `tempo2 = 5`; `00905` in Spur 6 setzt TPL auf 5.
 - **Blockliste** zeigt `002:intro_1` als einzigen benannten Block — die Messung
   fand ebenfalls genau einen Blocknamen.
-- **Programmversion.** Titelzeile: *OctaMED Professional V1.03c*, nicht
-  SoundStudio. Der Befehlskatalog stammt aus dem SoundStudio-Handbuch. Für `17`
-  deckt sich das Verhalten; bei Nachschlagen in dieser älteren Version kann die
-  Befehlsliste knapper sein.
+- **Programmversion — zunächst falsch gedeutet, dann geklärt.** Die Titelzeile
+  des ersten Screenshots lautet *OctaMED Professional V1.03c*. Daraus wurde
+  irrig geschlossen, das Programm sei nicht SoundStudio und der Befehlskatalog
+  stamme aus dem falschen Handbuch.
+
+  Weitere Screenshots zeigen dasselbe Programm mit englischer Oberfläche:
+  *„OctaMED Soundstudio © 1991–1997 Teijo Kinnunen & Ray Burt-Frost"*,
+  *„This is OctaMED SoundStudio v1.03c, for the Amiga"* und im Info-Fenster
+  *„OctaMED Soundstudio V1.03c (7.08) (08.02.97)"* neben einem Knopf
+  „Übersetzung". Die **deutsche Lokalisierung** schreibt „Professional" in die
+  Titelzeile.
+
+  Es ist dasselbe Programm. Das SoundStudio-Handbuch ist die richtige Quelle,
+  der Vorbehalt ist zurückgenommen.
+
+  **Die interne Nummer (7.08) ist der Schlüssel:** Kinnunens Spezifikation sagt
+  „Note that 'V7' in the following documentation refers to OctaMED Soundstudio
+  V1." Alle mit „>= V7" markierten Felder sind in Dateien dieses Programms also
+  zu erwarten.
+
+## 5. Formatversion und Instrumentstruktur je Datei
+
+| Datei | Kennung | Mixing | `s_ext_entrsz` | enthält bis |
+|---|---|---|---|---|
+| `N_WOISTDAS_MU80.med` | MMD3 | **ja** | **24 B** | über die Spezifikation hinaus |
+| `N_ich_will_neues.mmd1` | MMD1 | nein | 18 B | `long_repeat`/`long_replen` (V7) |
+| `O_Wie_Eine_Marionette.MMD` | MMD1 | nein | 18 B | `long_repeat`/`long_replen` (V7) |
+| `sehnsuchts_blues.MMD1.pp` | MMD1 | nein | **10 B** | `output_device` (V5.02) |
+| `unsere_hände_spielen.MMD` | MMD1 | nein | 18 B | `long_repeat`/`long_replen` (V7) |
+
+**MMD3 hängt am Mixing-Modus.** Die einzige MMD3-Datei ist genau die mit
+gesetztem `FLAG2_MIX`; alle MMD1-Dateien haben es nicht. Das bestätigt
+Kinnunens Begründung für die eigene Kennung („so that old programs would not
+try to play modules they really can't") am echten Material. Die Formatvielfalt
+in der Sammlung stammt also nicht aus verschiedenen Programmen, sondern aus der
+Frage, ob Mixing benutzt wurde.
+
+**`InstrExt` hat keine feste Größe.** Gemessen: 10, 18 und 24 Bytes je Eintrag.
+Die Spezifikation dokumentiert 18. Die MMD3-Datei führt **24** — sechs Bytes
+mehr als beschrieben, also eine undokumentierte Erweiterung.
+
+Folge für den Parser, wie die Spezifikation es ausdrücklich verlangt: immer
+`s_ext_entrsz` lesen, Felder nur anfassen, wenn die Größe sie abdeckt, und
+überzählige Bytes überspringen statt zu deuten. Dasselbe gilt für
+`i_ext_entrsz`. Bei `sehnsuchts_blues` existiert `long_midi_preset` gar nicht.
+
+## Zur Produktabstammung
+
+| Programm | Format | Anmerkung |
+|---|---|---|
+| MED V2.1 | MMD0 | |
+| OctaMED Professional | MMD1 | neue Blockstruktur |
+| OctaMED V5+ | MMD2 | Sections, Playseqs |
+| OctaMED SoundStudio V1 | MMD3 | intern **V7** — daher „V7" in der Spezifikation |
+
+Der Autor besitzt SoundStudio V1.03c. Laut dessen eigenem Startfenster war es
+ab Juli 96 kommerziell und wurde im Februar 97 als Freeware freigegeben
+(„released as freeware far earlier than intended … due to the high amounts of
+piracy"). Das erklärt seine Erinnerung an zwei Bezugsquellen, ohne dass es zwei
+verschiedene Programme gewesen sein müssen.

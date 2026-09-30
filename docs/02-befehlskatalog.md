@@ -132,3 +132,36 @@ Tutka hat CC7 also um genau eine Stelle zu tief eingeordnet.
 `18` Cut Note (Lautstärke auf 0, kein Note-Off) · `19` Sample-Startoffset ·
 `1A`/`1B` Lautstärke einmalig auf/ab · `1E` Zeile wiederholen ·
 `20`–`2F` Mix-Modus (für dieses Projekt ohne Belang)
+
+## Offen: der Wertebereich von Befehl `0C` (Velocity)
+
+Drei Quellen, drei Aussagen — und keine erklärt die Daten:
+
+| Quelle | Bereich |
+|---|---|
+| Handbuch, `0C` (MIDI) | „The normal Amiga sample volume range of 0 - 64 is converted to the MIDI range of 0 - 127." |
+| Tutka `conversion.cpp` | „MIDI volumes are in range 0-95 in OctaMED", gerechnet `wert * 0x80 / 0x60` |
+| **Gemessen (7 Dateien)** | Werte bis **exakt 127**, nie darüber; Maxima je Datei 96, 100, 111, 112, 127 |
+
+Wäre der gespeicherte Wert der Amiga-Bereich 0–64, könnten 111 oder 127 nicht
+vorkommen, und eine Verdopplung ergäbe 254. Auffällig: `N_ich_will_neues.mmd1`
+endet exakt bei 96 = `0x60`, was zu Tutkas Annahme passt — die übrigen Dateien
+gehen darüber hinaus.
+
+**Umsetzung vorerst:** durchreichen, bei 127 begrenzt
+(`Befehlskatalog.velocity(ausBefehlsdaten:)`). Das ist an den Extremen
+nachweislich richtig und verliert keine Information. Eine Skalierung wäre an
+beiden Enden falsch, falls die Annahme nicht stimmt.
+
+**So lässt es sich klären** (5 Minuten im Emulator): eine Note mit `0C40` auf ein
+MIDI-Instrument setzen, MIDI-Ausgang im DAW mitschneiden, gesendete Velocity
+ablesen.
+
+- Velocity 64 → Durchreichung ist richtig.
+- Velocity 85 → Tutkas Skalierung (`0x40 × 128/96`).
+- Velocity 127 → Handbuch-Skalierung (`0x40 × 2`, gedeckelt).
+
+Davon unberührt und **belegt**: die Instrument-Grundlautstärke `svol` (0–64)
+wird verdoppelt und bei 127 gedeckelt. Das zeigt das undokumentierte Feld der
+24-Byte-`InstrExt` (47→94, 49→98, 48→96, 64→127, 32→64, 50→100).
+Zwei verschiedene Größen, nicht zu verwechseln.

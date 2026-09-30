@@ -166,6 +166,34 @@ unterstellt, jeder gesetzte Wert sei bewusst gewählt worden; der Autor weist
 selbst darauf hin, dass die Songs von Hand programmiert wurden und Fehler
 enthalten.
 
+### Geprüft und verworfen: Zusammenhang mit der Formatversion
+
+Vermutung des Autors: Womöglich hat die Windows-Version den Wertebereich
+geändert, vielleicht wegen der 16-Bit-Samples. Das würde sich an MMD1 gegen
+MMD3 zeigen. Tut es nicht:
+
+| Kennung | Datei | > 64 | max | versch. Werte 65–127 |
+|---|---|---|---|---|
+| MMD1 | `O_Wie_Eine_Marionette.MMD` | 40 % | 111 | **25** |
+| MMD1 | `unsere_hände_spielen.MMD` | 15 % | 100 | **36** |
+| MMD1 | `sehnsuchts_blues.MMD1.pp` | 15 % | 112 | 18 |
+| MMD1 | `N_ich_will_neues.mmd1` | 7 % | 96 | 4 |
+| MMD3 | `N_WOISTDAS_MU80.med` | 18 % | 127 | 30 |
+| MMD3 | `final_manchmaltriffteinlächeln2001.med` | 76 % | 127 | 18 |
+| MMD3 | `final_soverloren.med` | 75 % | 112 | 4 |
+
+Die Amiga-geschriebenen MMD1-Dateien nutzen den oberen Bereich ebenso, eine
+davon mit 36 verschiedenen Werten über 64. Der Bereich ist keine Neuerung der
+Windows-Version.
+
+Die 16-Bit-Sample-Spur führt ebenfalls nicht weiter: Die Messung filtert auf
+MIDI-Instrumente, Sample-Lautstärken sind gar nicht enthalten.
+
+Was sich unterscheidet, ist der Arbeitsstil je Song: `N_WOISTDAS_MU80.med` hat
+93 % ungerade Werte (feiner, vermutlich gezeichneter Verlauf),
+`final_soverloren.med` insgesamt nur sechs verschiedene, alle gerade (von Hand
+gesetztes 16er-Raster).
+
 **Entscheidbar am Original:** eine Note mit `0C40` auf ein MIDI-Instrument,
 MIDI-Ausgang mitschneiden, Velocity ablesen. 127 bestätigt die Skalierung,
 64 das Durchreichen.

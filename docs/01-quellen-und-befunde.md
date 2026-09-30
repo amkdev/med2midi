@@ -276,12 +276,26 @@ Die Pattern-Ansicht bildet das nach.
 | `sehnsuchts_blues.MMD1.pp` | MMD1 | nein | **10 B** | `output_device` (V5.02) |
 | `unsere_hände_spielen.MMD` | MMD1 | nein | 18 B | `long_repeat`/`long_replen` (V7) |
 
-**MMD3 hängt am Mixing-Modus.** Die einzige MMD3-Datei ist genau die mit
-gesetztem `FLAG2_MIX`; alle MMD1-Dateien haben es nicht. Das bestätigt
-Kinnunens Begründung für die eigene Kennung („so that old programs would not
-try to play modules they really can't") am echten Material. Die Formatvielfalt
-in der Sammlung stammt also nicht aus verschiedenen Programmen, sondern aus der
-Frage, ob Mixing benutzt wurde.
+**Woher stammt die MMD3-Datei? — offen, aber mit Indizien.**
+
+Beobachtung: Die einzige MMD3-Datei ist genau die mit gesetztem `FLAG2_MIX`.
+Daraus wurde zunächst geschlossen, MMD3 hänge am Mixing-Modus, und das sei
+„am Material bestätigt". **Das war eine Überinterpretation bei n = 1.** Mit
+einer einzigen MMD3-Datei lassen sich zwei Erklärungen nicht trennen:
+
+1. SoundStudio schreibt MMD3, weil Mixing an ist (Kinnunens Begründung).
+2. Die Datei stammt aus der **Windows-Version** (MED SoundStudio V2.1), die
+   der Autor ebenfalls benutzt hat — seine eigene Vermutung.
+
+**Indizien sprechen für (2):** siehe den entschlüsselten `InstrExt`-Zusatz
+unten sowie den Songnamen `'<ohne Namen>'` — ein *deutscher* Vorgabename,
+während die Windows-Version englische Menüs hat. Das passt zu einem Song, der
+auf dem deutschen Amiga entstand und später unter Windows neu gespeichert
+wurde.
+
+Zur Klärung genügen weitere MMD3-Dateien: Findet sich eine **ohne** Mixing-Flag,
+ist (1) widerlegt. Findet sich eine mit 18-Byte-`InstrExt`, stammt sie vom
+Amiga.
 
 **`InstrExt` hat keine feste Größe.** Gemessen: 10, 18 und 24 Bytes je Eintrag.
 Die Spezifikation dokumentiert 18. Die MMD3-Datei führt **24** — sechs Bytes
@@ -291,6 +305,39 @@ Folge für den Parser, wie die Spezifikation es ausdrücklich verlangt: immer
 `s_ext_entrsz` lesen, Felder nur anfassen, wenn die Größe sie abdeckt, und
 überzählige Bytes überspringen statt zu deuten. Dasselbe gilt für
 `i_ext_entrsz`. Bei `sehnsuchts_blues` existiert `long_midi_preset` gar nicht.
+
+Randnotiz: `i_ext_entrsz` ist in **allen** Dateien 42, die Spezifikation
+dokumentiert 40 (`name[40]`). Diese zwei Zusatzbytes schreibt auch die
+Amiga-Version; sie taugen nicht zur Unterscheidung.
+
+### Der `InstrExt`-Zusatz in der MMD3-Datei — entschlüsselt
+
+Die sechs Bytes jenseits der dokumentierten 18 sind nicht leer. Byte 19
+(Offset 18) gemessen gegen das Amiga-Feld `svol`:
+
+| `svol` (0–64) | Byte 19 |
+|---|---|
+| 47 | 94 |
+| 49 | 98 |
+| 48 | 96 |
+| 64 | 127 |
+| 32 | 64 |
+| 50 | 100 |
+
+Die Beziehung ist **`svol × 2`, gedeckelt bei 127** — alle sechs Werte passen.
+Bei Instrumenten ohne MIDI-Kanal steht 0. Es ist also die
+**Instrumentlautstärke im MIDI-Bereich 0–127**, während `svol` im Amiga-Bereich
+0–64 bleibt. Bytes 20–24 sind in dieser Datei durchgehend null.
+
+Ein Programm, das `InstrExt` um ein MIDI-skaliertes Lautstärkefeld erweitert,
+ist MIDI-nativer als die Amiga-Version — und die Amiga-V7.08 schreibt diese
+Bytes nachweislich nicht (18 Bytes). Die MMD3-Datei stammt somit von einem
+**späteren Programm als OctaMED SoundStudio V1.03c für Amiga**.
+
+**Folge für den Export:** Wo dieses Feld existiert, ist es der genauere Wert
+für die Anfangslautstärke als `svol × 2` aus dem Amiga-Feld — es ist bereits
+die Zahl, die das schreibende Programm gesendet hätte. Wo es fehlt, wird aus
+`svol` gerechnet.
 
 ## Zur Produktabstammung
 

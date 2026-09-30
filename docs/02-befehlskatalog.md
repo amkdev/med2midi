@@ -30,11 +30,11 @@ täte — aber der Export benutzt sie nicht.
 | `09` | Ticks pro Zeile (TPL) | Level `$01`–`$20` |
 | `0A` | **Polyphonic Aftertouch** | *nicht* Velocity — Tutka irrt hier |
 | `0C` | Velocity / Lautstärke | Amiga-Bereich 0–64 → MIDI 0–127 |
-| `0D` | Channel Aftertouch | wirkt auf den zuletzt benutzten Kanal |
+| `0D` | Channel Aftertouch | Kanal der Spur (siehe unten) |
 | `0E` | Pan | Level `$00`–`$7F` |
 | `0F` | Tempo und Sonderfunktionen | siehe unten |
 | `10` | SysEx-Nachricht senden | Level = Nachrichtennummer |
-| `17` | **Volume Controller (CC7)** | wirkt auf den zuletzt benutzten Kanal |
+| `17` | **Volume Controller (CC7)** | Kurzform für `05 07` + `00 xx`; Kanal der Spur |
 | `1C` | MIDI-Preset wechseln | Programmwechsel |
 | `1D` | Sprung zum nächsten Playseq-Eintrag | mit Zeilennummer |
 | `1F` | Note Delay und Retrigger | |
@@ -57,16 +57,56 @@ täte — aber der Export benutzt sie nicht.
 `0F FF` ist in den Testdateien der Hauptmechanismus für Note-Off — vom Autor
 bestätigt: „für das Noteoff gab es immer einen pattern-befehl".
 
-## Zustandsabhängige Befehle
+## Zustandsabhängige Befehle — der Bezugsrahmen ist die Spur
 
-`0A`, `0D` und `17` wirken laut Handbuch auf den **„most recently used
-channel"**, nicht auf das Instrument ihrer eigenen Zeile.
+`0A`, `0D` und `17` wirken laut Handbuch nicht auf das Instrument ihrer eigenen
+Zeile, sondern:
 
-Das ist kein Detail: Die Player-Simulation muss diesen Zustand mitführen, sonst
-landen Ausblendungen und Aftertouch auf dem falschen Kanal. Es erklärt
-wahrscheinlich auch, warum der Autor eigene Instrumente
-`MidiControlChannel_…` mit Lautstärke 0 angelegt hat — um den „zuletzt
-benutzten Kanal" gezielt zu bestimmen.
+> `0A`: „Changes the polyphonic aftertouch of **the most recent note**."
+> `0D`: „Sends a channel aftertouch message to **the most recently used
+> channel**."
+> `17`: „Changes the volume controller value for **the most recently used
+> channel**."
+
+Das Handbuch sagt nicht ausdrücklich, in welchem Bezugsrahmen „most recently"
+gilt. **An den echten Daten gemessen: pro Spur.**
+
+`O_Wie_Eine_Marionette.MMD`, Block 4, Zeile 1 — vier `17`-Befehle gleichzeitig:
+
+| Spur | letztes Instrument auf dieser Spur | Kanal | Wert |
+|---|---|---|---|
+| 2 | 10 | 10 | `58` |
+| 7 | 1 | 1 | `7F` |
+| 10 | 2 | 2 | `7F` |
+| 14 | 3 | 3 | `70` |
+
+Über die Zeilen 1–5 laufen die Werte `58,58,58,57,57` / `7F,7F,7F,7E,7E` /
+`70,70,70,6F,6F` — ein gemeinsames Ausblenden auf vier Kanälen mit je eigenem
+Ausgangspegel.
+
+Bei **globalem** Bezug würden alle vier denselben Kanal treffen und sich
+überschreiben; der Song wäre unspielbar. Der Bezug ist also die Spur, was auch
+das Handbuch-Beispiel zu `05`/`00` nahelegt (Befehle auf `---`-Zeilen unter
+einer Note mit Instrument 03 senden `$B0`, also Kanal 1).
+
+Das deckt sich mit dem Einwand des Autors: Bei multitimbraler Nutzung wäre ein
+globaler „zuletzt benutzter Kanal" unbrauchbar.
+
+**Folge für die Player-Simulation:** Sie führt **pro Spur** den zuletzt
+gesetzten Kanal, die zuletzt gespielte Note und die zuletzt mit `05` gewählte
+Controller-Nummer mit. Laut Handbuch gilt zusätzlich: „Remember that each MIDI
+channel has its own controller number" — die mit `05` gewählte Nummer ist also
+Zustand **pro Kanal**, nicht pro Spur.
+
+## Mehrere Spuren pro Instrument = Mehrstimmigkeit
+
+In `O_Wie_Eine_Marionette.MMD` hat Block 4 zwanzig Spuren, aber nur vier
+Instrumente: Spuren 0–2 auf Instrument 10, Spuren 3–7 auf Instrument 1,
+Spuren 8–10 und 12 auf Instrument 2, Spuren 11, 13, 14 auf Instrument 3.
+
+Der Autor hat mehrere Spuren pro Instrument für Akkorde benutzt. Die im
+Projekt-Prompt gewählte Voreinstellung „eine MIDI-Spur pro MED-Instrument"
+fasst diese Spuren korrekt zusammen.
 
 ## Tutkas Fehler
 

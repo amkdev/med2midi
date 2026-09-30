@@ -20,6 +20,27 @@ die Spezifikation des Formatautors, zu finden in den UADE-Amiga-Quellen:
 | MMD2 | `0x4D4D4432` | OctaMED V5+ (Sections, Playseqs, bis 64 Spuren) |
 | MMD3 | `0x4D4D4433` | OctaMED SoundStudio — Aufbau identisch zu MMD2 |
 
+## 1a. Rangfolge der Quellen
+
+Grundsatz, vom Autor formuliert: Die verfügbaren Quellcodes sind mit Vorsicht zu
+genießen. Tutka und OpenMPT sind Nachbauten von Einzelkämpfern, entstanden zu
+einer Zeit mit kaum verfügbarer Dokumentation — sie hatten weniger in der Hand
+als dieses Projekt jetzt. Das hat sich bestätigt: Tutka enthält fünf belegte
+Fehler in der Befehlstabelle, OpenMPT kennt Befehl `0x17` überhaupt nicht.
+
+| Rang | Quelle | Charakter |
+|---|---|---|
+| (0) | OctaMED-Quellcode selbst | nicht veröffentlicht |
+| 1 | **Die echten Songdateien** | können nicht lügen |
+| 2 | **OctaMED im Amiga-Emulator** | das Programm selbst, kein Nachbau |
+| 3 | Kinnunen: `MMD_FileFormat.doc`, Handbuch Anhang A | vom Urheber, aber lückenhaft |
+| 4 | UADE `amigasrc/players/med/` (68k) | Originalcode, nur die Player-Routine |
+| 5 | Tutka, OpenMPT | Nachbauten, nachweislich fehlerhaft |
+
+**Regel:** Wo Quellen sich widersprechen, entscheidet die Messung an den echten
+Dateien. Das ist bisher dreimal so ausgegangen — bei `0x17`, bei `0x05` und bei
+der Velocity-Umrechnung. Jede Formatannahme im Code trägt eine Quellenangabe.
+
 ## 2. Widersprüche zwischen den Referenzen
 
 ### 2.1 Tutka liest MMD3 nicht und MMD0/MMD1 falsch

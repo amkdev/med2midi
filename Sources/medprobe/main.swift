@@ -151,4 +151,26 @@ for pfad in o.dateien {
         for w in song.diagnose.warnungen { print("     • \(w)") }
     }
     for h in song.diagnose.hinweise { print("  Hinweis       : \(h)") }
+
+    let folge = Notenanalyse.songFolge(song)
+    let befunde = Notenanalyse.prüfe(song, songFolge: folge)
+    var nachArt: [String: [Notenbefund]] = [:]
+    for b in befunde {
+        let schlüssel: String
+        switch b.art {
+        case .noteOffOhneNote:   schlüssel = "Note-Off in Zeile 0 ohne klingende Note (Vorsorge)"
+        case .noteOffMittenImBlock: schlüssel = "Note-Off mitten im Block, ohne klingende Note"
+        case .amSongendeOffen:   schlüssel = "Am Songende noch offen"
+        }
+        nachArt[schlüssel, default: []].append(b)
+    }
+    if befunde.isEmpty {
+        print("  Notenverlauf  : unauffällig (\(folge.count) Sequenzpositionen)")
+    } else {
+        print("  Notenverlauf  : \(befunde.count) Auffälligkeiten über \(folge.count) Sequenzpositionen")
+        for (art, liste) in nachArt.sorted(by: { $0.key < $1.key }) {
+            print("     • \(art): \(liste.count)×")
+            for b in liste.prefix(3) { print("         \(b)") }
+        }
+    }
 }

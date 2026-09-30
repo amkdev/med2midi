@@ -133,35 +133,77 @@ Tutka hat CC7 also um genau eine Stelle zu tief eingeordnet.
 `1A`/`1B` Lautstärke einmalig auf/ab · `1E` Zeile wiederholen ·
 `20`–`2F` Mix-Modus (für dieses Projekt ohne Belang)
 
-## Offen: der Wertebereich von Befehl `0C` (Velocity)
+## Geklärt: der Wertebereich von Befehl `0C` (Velocity)
 
-Drei Quellen, drei Aussagen — und keine erklärt die Daten:
+Zunächst falsch umgesetzt (Verdopplung), dann gemessen und entschieden.
 
-| Quelle | Bereich |
+| Quelle | Aussage |
 |---|---|
 | Handbuch, `0C` (MIDI) | „The normal Amiga sample volume range of 0 - 64 is converted to the MIDI range of 0 - 127." |
-| Tutka `conversion.cpp` | „MIDI volumes are in range 0-95 in OctaMED", gerechnet `wert * 0x80 / 0x60` |
-| **Gemessen (7 Dateien)** | Werte bis **exakt 127**, nie darüber; Maxima je Datei 96, 100, 111, 112, 127 |
+| Tutka `conversion.cpp` | „MIDI volumes are in range 0-95 in OctaMED", `wert * 0x80 / 0x60` |
+| **Messung an 7 Dateien** | Werte bis exakt 127, nie darüber |
 
-Wäre der gespeicherte Wert der Amiga-Bereich 0–64, könnten 111 oder 127 nicht
-vorkommen, und eine Verdopplung ergäbe 254. Auffällig: `N_ich_will_neues.mmd1`
-endet exakt bei 96 = `0x60`, was zu Tutkas Annahme passt — die übrigen Dateien
-gehen darüber hinaus.
+**Entscheidend ist die Verteilung.** Die häufigsten Werte liegen in fast allen
+Dateien auf dem 16er-Raster **16, 32, 48, 64, 80, 96, 112** — acht Stufen über
+0–127. In einem 0–64-Bereich wäre das natürliche Raster 8/16/24/…/64, und 80,
+96, 112 gäbe es nicht.
 
-**Umsetzung vorerst:** durchreichen, bei 127 begrenzt
-(`Befehlskatalog.velocity(ausBefehlsdaten:)`). Das ist an den Extremen
-nachweislich richtig und verliert keine Information. Eine Skalierung wäre an
-beiden Enden falsch, falls die Annahme nicht stimmt.
+| Datei | ≤ 64 | häufigste Werte |
+|---|---|---|
+| `N_WOISTDAS_MU80.med` | 81 % | 39, 19, 31, 15, 7, 115 |
+| `N_ich_will_neues.mmd1` | 92 % | 16, 32, 48, 64, 8, 96 |
+| `O_Wie_Eine_Marionette.MMD` | 59 % | 64, 80, 48, 96, 32, 111 |
+| `final_manchmaltriffteinlächeln2001.med` | **23 %** | 80, 96, 64, 112, 48, 32 |
+| `final_soverloren.med` | **24 %** | 80, 64, 48, 96, 112, 104 |
+| `sehnsuchts_blues.MMD1.pp` | 84 % | 48, 64, 80, 96, 16, 32 |
+| `unsere_hände_spielen.MMD` | 84 % | 32, 48, 16, 64, 80, 96 |
 
-**So lässt es sich klären** (5 Minuten im Emulator): eine Note mit `0C40` auf ein
-MIDI-Instrument setzen, MIDI-Ausgang im DAW mitschneiden, gesendete Velocity
-ablesen.
+Bei den beiden `final_`-Dateien liegen drei Viertel aller Velocities über 64.
+Mit Skalierung würden 64, 80, 96 und 112 **alle zu 127** — beide Stücke hätten
+keinerlei Dynamik mehr. Das kann nicht sein, was der Autor gehört hat.
 
-- Velocity 64 → Durchreichung ist richtig.
-- Velocity 85 → Tutkas Skalierung (`0x40 × 128/96`).
-- Velocity 127 → Handbuch-Skalierung (`0x40 × 2`, gedeckelt).
+Gegenprobe zur Vollständigkeit: Die hohen Werte stehen auf MIDI-Instrumenten,
+nicht auf Sample-Instrumenten (getrennt gemessen über das auf der Spur aktive
+Instrument). Und `FLAG_VOLHEX` (0x10) ist reine Anzeigesache — Dateien mit und
+ohne gesetztes Flag zeigen dieselben Wertebereiche.
 
-Davon unberührt und **belegt**: die Instrument-Grundlautstärke `svol` (0–64)
-wird verdoppelt und bei 127 gedeckelt. Das zeigt das undokumentierte Feld der
-24-Byte-`InstrExt` (47→94, 49→98, 48→96, 64→127, 32→64, 50→100).
+**Umsetzung:** durchreichen, bei 127 begrenzt
+(`Befehlskatalog.velocity(ausBefehlsdaten:)`).
+
+Davon zu trennen und ebenfalls belegt: die Instrument-Grundlautstärke `svol`
+(0–64) wird verdoppelt und bei 127 gedeckelt — das zeigt das undokumentierte
+Feld der 24-Byte-`InstrExt` (47→94, 49→98, 48→96, 64→127, 32→64, 50→100).
 Zwei verschiedene Größen, nicht zu verwechseln.
+
+## Sample-Instrumente kommen vor — anders als im Projekt-Prompt angenommen
+
+Der Projekt-Prompt sagt „ausschließlich MIDI-Instrumente, keine Samples". In
+zwei der sieben Dateien stimmt das nicht ganz:
+
+| Datei | Instrument ohne MIDI-Kanal | Noten | Sampledaten |
+|---|---|---|---|
+| `final_manchmaltriffteinlächeln2001.med` | 3, 5 | 8, 2 | keine |
+| `final_soverloren.med` | 9 | 189 | keine |
+
+Alle drei haben **keinen Sampledatensatz** in der Datei. Die Spezifikation
+erklärt das bei `smplarr`: „This pointer is zero in OctaMED Pro MMD1 songs. In
+this case, OctaMED Pro loads the instruments from disk(s)." Die Samples lagen
+als eigene Dateien daneben.
+
+Diese Noten erzeugen keine MIDI-Ausgabe. Damit sie nicht stillschweigend
+verschwinden, meldet die Diagnose sie als Warnung.
+
+## Befehl `0A`: vermutlich aus alter Gewohnheit gesetzt
+
+In `final_manchmaltriffteinlächeln2001.med` steht `0A` **1478-mal**, aber nur
+mit drei verschiedenen Werten: **0, 1 und 15**; 78 % neben einer Note.
+Beispielverlauf über aufeinanderfolgende Zeilen: `1 0 1 0 1 0 1 0`.
+
+Polyphoner Aftertouch — die MIDI-Bedeutung laut Anhang A — wäre ein Verlauf
+über 0–127. Das Muster passt eher zur Sample-Bedeutung („Volume Slide,
+Nibble-Geschwindigkeit"), die der Autor aus älteren OctaMED-Versionen kannte.
+Das Instrument dahinter liegt aber auf MIDI-Kanal 6, OctaMED hat also
+polyphonen Aftertouch mit Wert 15 gesendet — praktisch unhörbar.
+
+Die Diagnose meldet solche Fälle: ein Befehl mit sehr wenigen, kleinen Werten
+passt oft nicht zu seiner MIDI-Bedeutung.

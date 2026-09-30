@@ -40,6 +40,7 @@ public enum MEDLoader {
                                                  offset: Layout.Modul.song)
         }
         let blockarr = try r.zeiger(Layout.Modul.blockarr, feld: "blockarr")
+        let smplarr = try r.zeiger(Layout.Modul.smplarr, feld: "smplarr")
         let expOffset = try r.zeiger(Layout.Modul.expdata, feld: "expdata")
 
         // --- Songkopf (gemeinsame Felder ab 504 bzw. 764) -------------------
@@ -117,6 +118,11 @@ public enum MEDLoader {
                 name = r.textFest(x + i * iinfoGröße, länge: min(40, iinfoGröße))
             }
 
+            var hatSample = false
+            if let sa = smplarr, r.passt(sa + i * 4, 4) {
+                hatSample = (try r.zeiger(sa + i * 4, feld: "smplarr[\(i)]")) != nil
+            }
+
             instrumente.append(Instrument(
                 nummer: i + 1, name: name,
                 midiKanal: try r.u8(s + Layout.Sample.midich),
@@ -125,7 +131,7 @@ public enum MEDLoader {
                 standardLautstärke: try r.u8(s + Layout.Sample.svol),
                 transponierung: try r.i8(s + Layout.Sample.strans),
                 hold: hold, decay: decay, noteOffUnterdrücken: unterdrücken,
-                midiLautstärke: midiLautstärke))
+                midiLautstärke: midiLautstärke, hatSampleDaten: hatSample))
         }
 
         // --- Blöcke ----------------------------------------------------------

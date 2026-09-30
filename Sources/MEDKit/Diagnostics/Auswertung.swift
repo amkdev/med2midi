@@ -11,10 +11,16 @@ extension MEDLoader {
         var ohneWirkung: [UInt8: Int] = [:]
         var velocityÜber = 0
         var cmd3xFehlt: Set<UInt8> = []
+        var notenProInstrument: [UInt8: Int] = [:]
+        var werteProBefehl: [UInt8: Set<UInt8>] = [:]
 
         for block in blöcke {
             for zeile in 0..<block.zeilen {
                 for spur in 0..<block.spuren {
+                    let z = block.zelle(zeile: zeile, spur: spur)
+                    if z.note > 0 && z.instrument > 0 {
+                        notenProInstrument[z.instrument, default: 0] += 1
+                    }
                     for seite in 0..<block.seitenAnzahl {
                         let b = block.befehl(zeile: zeile, spur: spur, seite: seite)
                         // Befehl 00 mit Datenbyte != 0 ist ein echter Befehl
@@ -22,6 +28,7 @@ extension MEDLoader {
                         guard !b.istLeer else { continue }
 
                         statistik[b.nummer, default: 0] += 1
+                        werteProBefehl[b.nummer, default: []].insert(b.daten)
                         let ort = Fundstelle(block: block.nummer, blockname: block.name,
                                              zeile: zeile, spur: spur, seite: seite)
                         if fundstellen[b.nummer, default: []].count < 8 {
@@ -66,6 +73,28 @@ extension MEDLoader {
             diagnose.warnungen.append(Warnung(
                 art: .velocityÜberBereich(wert: 127),
                 fundstellen: fundstellen[0x0C] ?? [], anzahl: velocityÜber))
+        }
+
+        // Noten auf Instrumenten ohne MIDI-Kanal gehen beim Export verloren.
+        for ins in instrumente where !ins.istMIDI {
+            if let noten = notenProInstrument[UInt8(ins.nummer)], noten > 0 {
+                diagnose.warnungen.append(Warnung(
+                    art: .notenOhneMIDIKanal(instrument: ins.nummer, name: ins.name, noten: noten),
+                    fundstellen: [], anzahl: noten))
+            }
+        }
+
+        // Ein Befehl, der nur eine Handvoll kleiner Werte benutzt, passt oft
+        // nicht zu seiner MIDI-Bedeutung — etwa 0A (polyphoner Aftertouch),
+        // das in einer Datei nur die Werte 0, 1 und 15 trägt. Das deutet auf
+        // die Sample-Bedeutung, die der Autor im Kopf hatte.
+        for nummer: UInt8 in [0x0A, 0x0D] {
+            guard let werte = werteProBefehl[nummer], werte.count <= 4,
+                  let größter = werte.max(), größter <= 15,
+                  (statistik[nummer] ?? 0) > 50 else { continue }
+            diagnose.warnungen.append(Warnung(
+                art: .befehlMitAuffälligemWertebereich(nummer: nummer, werte: werte.sorted()),
+                fundstellen: fundstellen[nummer] ?? [], anzahl: statistik[nummer] ?? 0))
         }
 
         // Kanalbelegung: Warnung nur bei zwei KLINGENDEN Instrumenten.

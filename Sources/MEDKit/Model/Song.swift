@@ -75,6 +75,11 @@ public struct Instrument: Sendable {
     public let noteOffUnterdrücken: Bool?
     /// Undokumentiertes Feld der 24-Byte-InstrExt: Lautstärke im MIDI-Bereich.
     public let midiLautstärke: UInt8?
+    /// Ob die Datei Sampledaten für dieses Instrument enthält.
+    /// Spezifikation zu `smplarr`: "This pointer is zero in OctaMED Pro MMD1
+    /// songs. In this case, OctaMED Pro loads the instruments from disk(s)."
+    /// Ein Nicht-MIDI-Instrument ohne Sampledaten kann nichts erzeugen.
+    public let hatSampleDaten: Bool
 
     public var istMIDI: Bool { midiKanal > 0 }
     public var klingt: Bool { istMIDI && standardLautstärke > 0 }

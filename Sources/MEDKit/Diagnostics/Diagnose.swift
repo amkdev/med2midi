@@ -26,6 +26,8 @@ public struct Warnung: Sendable, CustomStringConvertible {
         case instrExtUngewöhnlich(größe: UInt16)
         case dumpUnvollständig(index: Int)
         case cmd3xFehlt(befehl: UInt8)
+        case notenOhneMIDIKanal(instrument: Int, name: String, noten: Int)
+        case befehlMitAuffälligemWertebereich(nummer: UInt8, werte: [UInt8])
         case sonstiges(String)
     }
 
@@ -52,6 +54,13 @@ public struct Warnung: Sendable, CustomStringConvertible {
             text = "Dump \(i) beginnt nicht mit F0 oder endet nicht mit F7"
         case .cmd3xFehlt(let b):
             text = "Befehl \(String(format: "%02X", b)) benutzt, aber keine Cmd3x-Tabelle vorhanden"
+        case .notenOhneMIDIKanal(let i, let n, let noten):
+            text = "Instrument \(i)\(n.isEmpty ? "" : " „\(n)“") hat keinen MIDI-Kanal, "
+                 + "wird aber mit \(noten) Noten gespielt — diese Noten erscheinen nicht im Export"
+        case .befehlMitAuffälligemWertebereich(let nummer, let werte):
+            text = "Befehl \(String(format: "%02X", nummer)) benutzt nur die Werte "
+                 + werte.map(String.init).joined(separator: ", ")
+                 + " — das passt nicht zu seiner MIDI-Bedeutung"
         case .sonstiges(let s):
             text = s
         }

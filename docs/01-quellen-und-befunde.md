@@ -188,3 +188,65 @@ Folgen:
 - Die MU80-Entschlüsselung (Phase 3) hat es mit ~408 Adressblöcken je Dump zu
   tun. Der genaue Kopfaufbau (Byte-Count- und Adressfelder) ist noch nicht
   entschlüsselt und gehört in Phase 3.
+
+## 4. Gegenprobe am Original: Amiga-Screenshot
+
+Am 2026-09-30 hat der Autor einen Screenshot aus **OctaMED Professional V1.03c**
+im Amiga-Emulator geliefert: `O_Wie_Eine_Marionette.MMD`, Block 4, Zeilen 0–34.
+
+Die Datei wurde unabhängig davon geparst und im OctaMED-Anzeigeformat
+gerendert. Ergebnis: **in jeder Zelle identisch.**
+
+| | Screenshot | Parser |
+|---|---|---|
+| Z000 Spur 0 | `E 5 A0000` | `E-5 A0000` |
+| Z000 Spur 3 | `C#6 10C50` | `C#6 10C50` |
+| Z000 Spur 6 | `00905` | `--- 00905` |
+| Z000 Spur 8 | `C#6 20C6F` | `C#6 20C6F` |
+| Z004 Spur 1 | `B 3 A0000` | `B-3 A0000` |
+| Z008 Spur 5 | `E 8 10C40` | `E-8 10C40` |
+| Z001–008 Spur 2 | `01758 … 01757` | `01758 … 01757` |
+| Z001–008 Spur 7 | `0177F … 0177D` | `0177F … 0177D` |
+
+Damit sind bestätigt: Notennummerierung samt Oktavlage, Instrumentnummer aus
+6 Bit, Befehls- und Datenbyte, die Anordnung Zeile-vor-Spur, die
+Blockindizierung.
+
+**Dies ist die Regressionsvorlage für die Pattern-Ansicht.** Erwartete Ausgabe
+für Block 4, Zeilen 000–008, Spuren 0–9:
+
+```
+000   E-5 A0000 C-4 A0000 C-6 A0C00 C#6 10C50 --- 00000 --- 00000 --- 00905 C-7 10C00 C#6 20C6F C#5 20C6F
+001   --- 00000 --- 00000 --- 01758 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177F --- 00000 --- 00000
+002   --- 00000 --- 00000 --- 01758 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177F --- 00000 --- 00000
+003   --- 00000 --- 00000 --- 01758 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177F --- 00000 --- 00000
+004   G#4 A0000 B-3 A0000 --- 01757 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177E --- 00000 --- 00000
+005   --- 00000 --- 00000 --- 01757 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177E --- 00000 --- 00000
+006   --- 00000 --- 00000 --- 01757 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177E --- 00000 --- 00000
+007   --- 00000 --- 00000 --- 01757 --- 00000 --- 00000 --- 00000 --- 00000 --- 0177E --- 00000 --- 00000
+008   D#5 A0000 F#5 A0000 --- 01757 --- 00000 C#8 10C40 E-8 10C40 D#8 10C40 --- 0177D --- 00000 --- 00000
+```
+
+### Anzeigeformat
+
+`NOTE` + **1 Hexziffer Instrument** + **2 Hexziffern Befehl** + **2 Hexziffern
+Level**. Beispiel `A0C00`: Instrument `A` (= 10), Befehl `0C`, Level `00`.
+Die Pattern-Ansicht bildet das nach.
+
+### Was der Screenshot zusätzlich belegt
+
+- **Spurbezogener Kanalzustand, optisch.** Spur 2 hat in Zeile 000 eine Note mit
+  Instrument `A` (Kanal 10); ab Zeile 001 stehen dort `17`-Befehle *ohne*
+  Instrument. Spur 7 dasselbe mit Instrument `1` (Kanal 1). Zwei Fades
+  nebeneinander auf verschiedenen Kanälen — siehe `02-befehlskatalog.md`.
+- **Velocity `0x6F`** steht sichtbar in Zeile 000 Spur 8 (`20C6F`). Der
+  Überlauf in Tutkas Umrechnung (`0x6F * 0x80 / 0x60` = 148) ist damit kein
+  theoretischer Fall.
+- **Tempo.** Statuszeile „Tempo = BPM 66/5" deckt sich mit den gemessenen
+  `deftempo = 66` und `tempo2 = 5`; `00905` in Spur 6 setzt TPL auf 5.
+- **Blockliste** zeigt `002:intro_1` als einzigen benannten Block — die Messung
+  fand ebenfalls genau einen Blocknamen.
+- **Programmversion.** Titelzeile: *OctaMED Professional V1.03c*, nicht
+  SoundStudio. Der Befehlskatalog stammt aus dem SoundStudio-Handbuch. Für `17`
+  deckt sich das Verhalten; bei Nachschlagen in dieser älteren Version kann die
+  Befehlsliste knapper sein.

@@ -124,34 +124,15 @@ Controller.
 
 ### 3.3 Offene Punkte, die geklärt werden müssen
 
-1. **Befehl `0x17` (2 485-mal).** Bei Tutka `CommandNotDefined`, bei OpenMPT
-   gar nicht vorhanden. In keiner gefundenen Dokumentation beschrieben.
-
-   **Hypothese (nicht belegt):** `0x17` ist die MIDI-Lautstärke CC7, und
-   Tutkas Tabelle ist an dieser Stelle um eins verschoben. Indizien:
-   Tutka ordnet CC7 dem Befehl `0x16` zu; die fünf Dateien benutzen `0x17`
-   2 485-mal und `0x16` kein einziges Mal; Tutkas Tabelle hat bei Index 5
-   nachweislich einen Fehler (siehe 3.2); das Messprofil — pro Spur eigener
-   Wert, 0x00–0x7F voll ausgeschöpft, glatte Verläufe, ohne Note — passt auf
-   eine kanalweise Lautstärke.
-   Nicht als Tatsache in den Code übernehmen, bevor es im Emulator geprüft ist. Messung: Datenbytes `0x00`–`0x7F`, alle 128 Werte
-   belegt, dichte gleitende Verteilung, zu 0–12 % mit Note kombiniert, fast
-   immer ohne Instrumentangabe (spurbezogen). Das Profil ist eindeutig ein
-   **kontinuierlicher Controller-Verlauf**. Welcher, ist noch offen.
-   Fundstellen für die Klärung im Emulator: `O_Wie_Eine_Marionette.MMD`,
-   Block 4, ab Zeile 1 — gleichzeitig auf Spur 2, 7, 10 und 14 mit je eigenem
-   Wert (`58`, `7F`, `7F`, `70`).
-2. **Befehl `0x05` (25-mal).** Ebenfalls bei Tutka undefiniert. OpenMPT deutet
-   es sample-seitig als Tone-Portamento + Volume-Slide, was MIDI-seitig nicht
-   passt.
-   Fundstellen: `unsere_hände_spielen.MMD`, Blöcke 7–12 jeweils Zeile 0, immer
-   `054A` zusammen mit einer Note auf Instrument 5
-   (`MidiControlChannel_FilterDistSound`).
-
-   **Klärungsweg:** Der Autor kann beide Songs im Amiga-Emulator öffnen und die
-   Befehlsbedeutung direkt in OctaMED nachschlagen. Das ist die verlässlichste
-   Quelle — verlässlicher als beide C-Portierungen, die den Befehl nicht
-   kennen.
+1. ~~Befehl `0x17`~~ — **GEKLÄRT am 2026-09-30.** Laut OctaMED-Handbuch,
+   Anhang A: „**17: CHANGE VOLUME CONTROLLER** (MIDI) — Changes volume
+   controller value for the most recently used channel." Also CC7, kanalweise.
+   Vom Nutzer im Amiga-Emulator gegengeprüft; er hat es vor allem zum
+   Ausblenden benutzt, was zu den gemessenen glatten Abwärtsverläufen passt.
+   Die Hypothese einer Verschiebung in Tutkas Tabelle ist damit bestätigt.
+   Siehe `02-befehlskatalog.md`.
+2. ~~Befehl `0x05`~~ — **GEKLÄRT** (siehe 3.2): Controller-Nummer, im Paar mit
+   Befehl `00` als Wert. Steht im Befehlskatalog.
 3. **Velocity-Überlauf.** Tutka rechnet `value * 0x80 / 0x60`. Bei gemessenen
    Werten bis `0x6F` ergibt das 148 — über 127. Muss begrenzt werden.
 4. **`0x10`-Datenbyte.** Werte 0 und 1 beobachtet. Ob 0- oder 1-basiert

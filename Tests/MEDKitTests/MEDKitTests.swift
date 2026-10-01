@@ -172,6 +172,32 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
     return b
 }
 
+@Test func noteDurationMatchesTheMeasurements() throws {
+    // Am Original gemessen: BPM 33, TPL 6, LPB 8; eine Note in Zeile 0 mit
+    // 15 Haltezeilen darunter. Gemessene Notenlaengen je hold-Wert.
+    let song = try MEDLoader.load(bytes: syntheticSong(tempo: 33, tpl: 6, lpb: 8, bpm: true))
+    for (hold, gemessen) in [(UInt8(1), 3.446), (16, 4.015), (64, 5.832)] {
+        let d = try #require(Timing.noteDuration(holdRows: 15, hold: hold, song: song))
+        #expect(abs(d - gemessen) < 0.01,
+                "hold \(hold): berechnet \(d) s, gemessen \(gemessen) s")
+    }
+}
+
+@Test func holdRowsCountsInstrumentOnlyCells() throws {
+    // Die Haltezeilen sind Daten: Zellen mit nur der Instrumentnummer.
+    guard let url = TestFiles.file("unsere_hände_spielen.MMD") else { return }
+    let song = try MEDLoader.load(file: url)
+    var gefunden = 0
+    for block in song.blocks {
+        for row in 0..<block.rows {
+            for track in 0..<block.tracks where block.cell(row: row, track: track).note > 0 {
+                if block.holdRows(afterRow: row, track: track) > 0 { gefunden += 1 }
+            }
+        }
+    }
+    #expect(gefunden > 100, "nur \(gefunden) Noten mit Haltezeilen")
+}
+
 @Test func svolToMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)

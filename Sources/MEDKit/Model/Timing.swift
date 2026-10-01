@@ -84,18 +84,35 @@ public enum Timing {
         return t * Double(song.ticksPerRow)
     }
 
-    /// Notenlänge aus dem Hold-Wert.
+    /// Notenlänge in Sekunden.
     ///
-    /// **Am Original gemessen** (2026-10-01): Bei SPD-Tempo 33 ergaben
-    /// `hold = 1` und `hold = 32` Notenlängen von 1,656 s und 2,276 s. Die
-    /// Differenz von 0,620 s entspricht 31 Ticks × 0,02008 s = 0,6224 s —
-    /// Abweichung 0,4 %. **Hold zählt Ticks.**
+    /// **Am Original gemessen** (2026-10-01, BPM 33, TPL 6, LPB 8 — Zeile
+    /// 227,25 ms, Tick 37,875 ms). Eine Note in Zeile 0, darunter 15 Zellen
+    /// mit nur der Instrumentnummer (in OctaMED als senkrechter Strich
+    /// gezeichnet):
     ///
-    /// Beide Messungen zerlegen sich als `1,634 s + hold × Tickdauer`; der
-    /// gleichbleibende Sockel war das, was die Note sonst beendet hat. Hold
-    /// wirkt also zusätzlich, nicht ausschliesslich.
-    public static func holdDuration(hold: UInt8, song: Song) -> Double? {
-        guard hold > 0, let t = tickDuration(song: song) else { return nil }
-        return Double(hold) * t
+    /// | `hold` | gemessene Länge | abzüglich `hold × Tick` |
+    /// |---|---|---|
+    /// | 1 | 3,446 s | 3,4081 s = 14,997 Zeilen |
+    /// | 16 | 4,015 s | 3,4090 s = 15,001 Zeilen |
+    /// | 64 | 5,832 s | 3,4080 s = 14,996 Zeilen |
+    ///
+    /// Daraus:
+    ///
+    ///     Notenlänge = Haltezeilen × Zeilendauer + hold × Tickdauer
+    ///
+    /// Die Haltezeilen sind die Zellen, die nur die Instrumentnummer tragen.
+    /// Sie sind **Daten**, keine Editier-Überbleibsel — OctaMED stellt sie als
+    /// Strich dar, und sie bestimmen die Grundlänge. `hold` kommt obendrauf,
+    /// klingt also über die gezeichneten Striche hinaus. Der Autor:
+    /// „die pipes sind schon mehrere zeilen vorbei — dann kommt das noteoff."
+    ///
+    /// Beendet wird die Note ausserdem durch `0F FF` oder die nächste Note auf
+    /// derselben Spur; dann gilt der frühere Zeitpunkt.
+    public static func noteDuration(holdRows: Int, hold: UInt8, song: Song) -> Double? {
+        guard let tick = tickDuration(song: song) else { return nil }
+        let row = tick * Double(song.ticksPerRow)
+        return Double(holdRows) * row + Double(hold) * tick
     }
+
 }

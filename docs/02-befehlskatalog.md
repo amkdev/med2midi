@@ -339,7 +339,11 @@ Gemessen, zwei Sorten:
 bestimmten Kanal, ohne eine Note zu spielen. Bei `N_ich_will_neues.mmd1` sind
 das 3691 von 4167 Fällen.
 
-**Instrument ohne alles** stützt die Vermutung des Autors:
+**Instrument ohne alles** — hier stand zunächst, das stütze die Vermutung eines
+Editier-Überbleibsels. **Das ist widerlegt:** Diese Zellen sind die
+Haltezeilen und bestimmen die Notenlänge (siehe unten, „Die Notenlänge
+insgesamt"). Die folgenden Beobachtungen bleiben richtig, ihre Deutung war
+falsch:
 
 - **Keine einzige Spur** trägt die Nummer durchgehend (0 von 44, 0 von 84 …).
   Eine Automatik des Programms würde durchlaufen.
@@ -513,33 +517,57 @@ Alle sieben Songdateien des Autors stehen im **BPM-Modus**.
 `DoFX` ruft `HoldAndFade` einmal je Spieltick; dort wird `trk_noteoffcnt`
 um eins verringert. Hold ist also eine Tickzahl.
 
-Messung des Autors, Testsong im SPD-Modus (Vorgabe eines neuen Songs,
-Tempo 33 → Tick 20,08 ms):
+**Drei Messungen bei bekannten Werten** (BPM 33, TPL 6, LPB 8 — Zeile
+227,25 ms, Tick 37,875 ms), eine Note in Zeile 0 mit 15 Haltezeilen darunter:
 
-| `hold` | Notenlänge |
-|---|---|
-| 1 | 1,656 s |
-| 32 | 2,276 s |
-| **Differenz** | **0,620 s** |
+| `hold` | gemessene Länge | Zuwachs | je Hold-Einheit |
+|---|---|---|---|
+| 1 | 3,446 s | | |
+| 16 | 4,015 s | +0,569 s | 37,93 ms |
+| 64 | 5,832 s | +1,817 s | 37,85 ms |
+| 1 → 64 | | +2,386 s | 37,87 ms |
 
-31 Ticks × 20,08 ms = 0,622 s — Abweichung 0,4 %. Beide Messungen zerlegen sich
-als `1,634 s + hold × Tickdauer`; der gleichbleibende Sockel war das, was die
-Note sonst beendet hat. **Hold wirkt zusätzlich, nicht ausschliesslich** — und
-war deshalb im ersten Versuch fast unsichtbar.
+Der berechnete Tick ist 37,875 ms — Abweichung 0,15 %.
 
-In den Songs des Autors steht `hold` meist auf 6 bei `TPL = 6`, also genau eine
-Zeile; 12 sind zwei Zeilen, die 64 in Marionette sind 12,8 Zeilen.
+### Die Notenlänge insgesamt
+
+Zieht man `hold × Tick` ab, bleibt in allen drei Messungen derselbe Sockel:
+
+| `hold` | Dauer − `hold × Tick` | in Zeilen |
+|---|---|---|
+| 1 | 3,4081 s | 14,997 |
+| 16 | 3,4090 s | 15,001 |
+| 64 | 3,4080 s | 14,996 |
+
+Genau **15 Zeilen** — und so viele Haltezeilen standen im Testpattern.
+
+```
+Notenlänge = Haltezeilen × Zeilendauer + hold × Tickdauer
+```
+
+**Die Haltezeilen sind Daten**, keine Editier-Überbleibsel: Zellen, die nur die
+Instrumentnummer tragen, ohne Note und ohne Befehl. OctaMED zeichnet sie als
+senkrechten Strich in der Notenspalte. Eine frühere Einordnung in diesem
+Dokument hielt sie für Reste gelöschter Noten — das ist widerlegt.
+
+`hold` kommt obendrauf, die Note klingt also über die gezeichneten Striche
+hinaus. Der Autor: „die pipes sind schon mehrere Zeilen vorbei — dann kommt das
+noteoff." Bei kleinen Hold-Werten fällt das kaum auf, bei `hold = 64` sind es
+hier 2,4 Sekunden.
+
+Umgesetzt als `Block.holdRows(afterRow:track:)` und
+`Timing.noteDuration(holdRows:hold:song:)`.
 
 ### Was eine Note beendet
 
 | Mechanismus | |
 |---|---|
-| `hold > 0` | Note klingt `hold` Ticks |
+| Haltezeilen + `hold` | die reguläre Länge |
 | `0F FF` | beendet sofort (`_ChannelOff`) |
 | nächste Note auf derselben Spur | beendet |
 
-Am Original bestätigt: Bei einer einzelnen Note in einem 64-Zeilen-Block kam das
-Note-Off beim Neustart des Blocks, 11 ms vor dem neuen Note-On — also durch die
-nächste Note, nicht durch Hold.
+Es gilt der früheste Zeitpunkt. Am Original bestätigt: Bei einer einzelnen Note
+in einem 64-Zeilen-Block ohne Haltezeilen kam das Note-Off beim Neustart des
+Blocks, 11 ms vor dem neuen Note-On — also durch die nächste Note.
 
 Umgesetzt in `MEDKit/Model/Timing.swift`.

@@ -81,6 +81,33 @@ public struct Block: Sendable {
     }
 
     public var pageCount: Int { 1 + extraPages.count }
+
+    /// Zahl der Haltezeilen hinter einer Note: Zellen, die **nur** die
+    /// Instrumentnummer tragen, ohne Note und ohne Befehl.
+    ///
+    /// OctaMED zeichnet sie als senkrechten Strich in der Notenspalte. Am
+    /// Original gemessen bestimmen sie die Grundlänge der Note; der Hold-Wert
+    /// des Instruments kommt in Ticks obendrauf. Siehe `Timing.noteDuration`.
+    public func holdRows(afterRow row: Int, track: Int) -> Int {
+        guard row >= 0, row < rows, track >= 0, track < tracks else { return 0 }
+        let instrument = cell(row: row, track: track).instrument
+        guard instrument != 0 else { return 0 }
+        var n = 0
+        var r = row + 1
+        while r < rows {
+            let z = cell(row: r, track: track)
+            guard z.note == 0, z.instrument == instrument, z.command.isEmpty else { break }
+            // Auch die Zusatzseiten müssen leer sein.
+            var leer = true
+            for page in 1..<pageCount where !command(row: r, track: track, page: page).isEmpty {
+                leer = false
+            }
+            guard leer else { break }
+            n += 1
+            r += 1
+        }
+        return n
+    }
 }
 
 public struct Instrument: Sendable {

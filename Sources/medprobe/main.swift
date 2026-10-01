@@ -13,6 +13,7 @@ struct Options {
     var tracks: Range<Int>?
     var page = 0
     var patternOnly = false
+    var exportFolder: String?
 }
 
 func range(_ s: String, standard: Range<Int>) -> Range<Int> {
@@ -31,12 +32,16 @@ while i < args.count {
     case "--zeilen": i += 1; o.rows = range(args[i], standard: o.rows)
     case "--spuren": i += 1; o.tracks = range(args[i], standard: 0..<0)
     case "--seite":  i += 1; o.page = Int(args[i]) ?? 0
+    case "--export": i += 1; o.exportFolder = args[i]
     case "--hilfe", "-h":
         print("""
         medprobe [--block N [--zeilen A-B] [--spuren A-B] [--seite N]] <datei> …
 
           ohne --block   Überblick: Kopfdaten, Instrumente, Dumps, Befehlsstatistik
           mit  --block   Pattern-Ansicht im OctaMED-Format
+
+        medprobe --export <ordner> <datei> …
+          schreibt die SysEx-Dumps als .syx samt Manifest
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -58,6 +63,23 @@ for pfad in o.files {
         song = try MEDLoader.load(file: url)
     } catch {
         print("\(url.lastPathComponent): FEHLER — \(error)")
+        continue
+    }
+
+    if let ordner = o.exportFolder {
+        let ziel = URL(fileURLWithPath: ordner)
+            .appendingPathComponent((url.lastPathComponent as NSString).deletingPathExtension)
+        do {
+            let r = try SysExExport.write(song: song, to: ziel)
+            print("\(url.lastPathComponent): \(r.dumps.count) Dumps nach \(ziel.path)")
+            for d in r.dumps {
+                let status = d.triggeredAt != nil ? "ausgelöst" : "nur gespeichert"
+                print("   \(d.fileName)  \(d.byteCount) B  \(d.messageCount) Nachr.  "
+                    + "\(d.hash)  \(status)")
+            }
+        } catch {
+            print("\(url.lastPathComponent): Export fehlgeschlagen — \(error)")
+        }
         continue
     }
 

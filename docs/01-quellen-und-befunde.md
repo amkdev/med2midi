@@ -192,9 +192,14 @@ Controller.
 Alle gemessenen Dumps beginnen mit `F0 43 00 4C 00 07 00 00` und enden mit
 `F7`. `0x43` = Yamaha, `0x4C` = **XG**. Längen 12 970 und 13 154 Bytes.
 
-Dieselben Dumps tauchen in mehreren Songs auf (identische Länge und Kopf) — die
-im Prompt gewünschte Hash-Erkennung gleicher Klangsätze ist also unmittelbar
-nützlich.
+Die Dumps sehen einander ähnlich — gleiche Länge, gleicher Kopf. **Sie sind
+aber alle verschieden:** Über alle sieben Dateien gibt es 11 Dumps und 11
+verschiedene SHA-256-Prüfsummen. Jeder Song hat seinen eigenen Klangsatz, und
+auch innerhalb eines Songs unterscheiden sich die Dumps. Eine frühere Fassung
+dieses Absatzes behauptete das Gegenteil.
+
+Die im Prompt gewünschte Hash-Erkennung ist trotzdem sinnvoll — sie belegt hier
+eben, dass nichts doppelt ist.
 
 **Gemessen:** Ein „Dump" ist keine einzelne Nachricht. Der 13 154-Byte-Dump
 zerfällt in **408 vollständige SysEx-Nachrichten** (408-mal `F0`, 408-mal `F7`,

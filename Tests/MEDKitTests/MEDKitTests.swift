@@ -210,6 +210,56 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
     #expect(gefunden > 100, "nur \(gefunden) Noten mit Haltezeilen")
 }
 
+@Test func sysExExportProducesValidFiles() throws {
+    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let song = try MEDLoader.load(file: url)
+    let folder = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("med2midi-test-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    let result = try SysExExport.write(song: song, to: folder)
+    #expect(result.dumps.count == 2)
+
+    for info in result.dumps {
+        let data = try Data(contentsOf: folder.appendingPathComponent(info.fileName))
+        #expect(data.count == info.byteCount)
+        #expect(data.first == 0xF0)
+        #expect(data.last == 0xF7)
+        // Der Strom muss restlos in F0...F7-Nachrichten zerfallen.
+        var count = 0, i = data.startIndex
+        while i < data.endIndex, data[i] == 0xF0 {
+            guard let end = data[i...].firstIndex(of: 0xF7) else { break }
+            count += 1
+            i = data.index(after: end)
+        }
+        #expect(i == data.endIndex, "\(info.fileName): Rest nach der letzten Nachricht")
+        #expect(count == info.messageCount)
+        #expect(info.manufacturer == 0x43)          // Yamaha
+        #expect(info.modelIDs.contains(0x4C))       // XG
+    }
+    // Einer der beiden Dumps wird per Befehl 10 ausgeloest.
+    #expect(result.dumps.contains { $0.triggeredAt != nil })
+    #expect(FileManager.default.fileExists(
+        atPath: folder.appendingPathComponent("dumps.txt").path))
+}
+
+@Test func dumpsAreAllDistinct() throws {
+    // Gleiche Laenge und gleicher Kopf, aber verschiedene Pruefsummen: jeder
+    // Song hat seinen eigenen Klangsatz. Eine fruehere Notiz behauptete das
+    // Gegenteil.
+    var hashes: Set<String> = []
+    var total = 0
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        for dump in song.dumps {
+            total += 1
+            hashes.insert(SysExExport.shortHash(dump.rawData))
+        }
+    }
+    guard total > 0 else { return }
+    #expect(hashes.count == total, "\(total) Dumps, aber nur \(hashes.count) verschiedene")
+}
+
 @Test func svolToMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)

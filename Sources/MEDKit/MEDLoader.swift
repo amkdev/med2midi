@@ -67,6 +67,21 @@ public enum MEDLoader {
         var cmd3x: [(typ: UInt8, number: UInt16)] = []
 
         if let e = expOffset {
+            // Die Spezifikation gibt MMD0exp mit 84 Bytes an (letztes Feld
+            // `tag_end`). Gemessen: alle drei MMD3-Dateien der Testsammlung
+            // enden 4 Bytes davor — die Windows-Version schreibt die Struktur
+            // verkuerzt. Da `modlen` genau der Dateigroesse entspricht, greift
+            // ein Lader, der die vollen 84 Bytes liest, hinter das Modul.
+            // Vermutlich der Grund, warum die Amiga-Version diese Dateien
+            // ablehnt. Wir lesen `tag_end` ohnehin nicht.
+            let available = r.count - e
+            if available < Layout.Exp.size {
+                warnings.append(Warning(
+                    art: .other("Erweiterungsstruktur ist \(Layout.Exp.size - available) "
+                        + "Bytes kürzer als dokumentiert (\(available) statt \(Layout.Exp.size)) "
+                        + "— ältere OctaMED-Versionen können die Datei deshalb ablehnen"),
+                    locations: [], count: 1))
+            }
             songName = r.string(try r.pointer(e + Layout.Exp.songname, field: "songname") ?? 0,
                               maxLength: 128)
             instrExtOffset = try r.pointer(e + Layout.Exp.expSmp, field: "exp_smp")

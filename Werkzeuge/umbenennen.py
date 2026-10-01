@@ -84,7 +84,7 @@ MAP = {
 "songTransponierung": "songTranspose", "mixingModus": "mixingMode",
 "weitereSongs": "extraSongs", "dateigröße": "fileSize", "dateiname": "fileName",
 "kennung": "signature", "passt": "fits", "zeiger": "pointer", "feld": "field",
-"text": "string", "textFest": "fixedString", "latin1": "latin1",
+"textFest": "fixedString",   # "text" bewusst NICHT: kollidiert mit SwiftUI TextField(text:)
 "lade": "load", "datei": "file", "bytes": "bytes",
 "leseBlock": "readBlock", "leseDumps": "readDumps", "leseCmd3x": "readCmd3x",
 "anzahlSeiten": "extraPageCount", "werteAus": "analyse",

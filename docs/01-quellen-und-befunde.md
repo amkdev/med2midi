@@ -392,3 +392,36 @@ ab Juli 96 kommerziell und wurde im Februar 97 als Freeware freigegeben
 („released as freeware far earlier than intended … due to the high amounts of
 piracy"). Das erklärt seine Erinnerung an zwei Bezugsquellen, ohne dass es zwei
 verschiedene Programme gewesen sein müssen.
+
+## 6. Die MMD3-Dateien sind strukturell verkürzt
+
+Der Autor konnte eine MMD3-Datei in OctaMED SoundStudio V1.03c auf dem Amiga
+**nicht laden**. Die Messung liefert einen guten Kandidaten für den Grund.
+
+Die Spezifikation gibt `MMD0exp` mit **84 Bytes** an; letztes Feld ist
+`ULONG tag_end`. Gemessen, Abstand vom `expdata`-Zeiger bis zum Dateiende:
+
+| Datei | Kennung | verfügbar | |
+|---|---|---|---|
+| `N_WOISTDAS_MU80.med` | MMD3 | **80** | `tag_end` fehlt |
+| `final_manchmaltriffteinlächeln2001.med` | MMD3 | **80** | `tag_end` fehlt |
+| `final_soverloren.med` | MMD3 | **80** | `tag_end` fehlt |
+| alle vier MMD1-Dateien | MMD1 | 84 | vollständig |
+
+`modlen` entspricht bei allen Dateien exakt der Dateigröße, der Amiga reserviert
+also genau so viel Speicher. Ein Lader, der die dokumentierten 84 Bytes liest,
+greift damit **vier Bytes hinter das Modul**.
+
+Der Parser dieses Projekts liest `tag_end` nicht und prüft ohnehin jeden
+Zugriff gegen die Dateigröße — das war Glück, nicht Vorsicht. Er meldet den
+Fall jetzt als Warnung.
+
+### Was die Amiga-Playroutine von der Erweiterung weiß: nichts
+
+`MED_PlayRoutine.i` relociert in `BlockInfo` genau vier Zeiger — `hldata`,
+`blockname` (`blocknamelen` wird übersprungen) und `pagetable` — und hört dann
+auf. Das fünfte Langwort, in dem die Windows-Version `cmdExtTableOffset`
+ablegt, kennt sie nicht.
+
+Die Amiga-Version kann die 7-Bit-Lautstärke also gar nicht auswerten. Für den
+Export dieser drei Dateien ist damit allein die Windows-Semantik maßgeblich.

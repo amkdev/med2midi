@@ -139,6 +139,10 @@ public struct Song: Sendable {
     public let zeilenProBeat: Int
     public let songTransponierung: Int8
     public let mixingModus: Bool
+    /// `FLAG_VOLHEX` — ob Lautstärkewerte hexadezimal zu lesen sind.
+    /// Wird beim Abspielen ausgewertet, nicht nur bei der Anzeige: dieselben
+    /// Patterndaten ergeben je nach Modus verschiedene MIDI-Velocities.
+    public let lautstärkeHex: Bool
 
     public let instrumente: [Instrument]
     public let blöcke: [Block]

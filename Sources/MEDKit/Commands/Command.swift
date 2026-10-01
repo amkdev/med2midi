@@ -129,7 +129,8 @@ public enum Befehlskatalog {
         case .controllerNummer:
             return "Controller-Nummer auf CC\(b.daten) setzen"
         case .velocity:
-            return "Velocity \(velocity(ausBefehlsdaten: b.daten))"
+            return "Velocity \(velocity(ausBefehlsdaten: b.daten, hexModus: true)) (hex) "
+                 + "bzw. \(velocity(ausBefehlsdaten: b.daten, hexModus: false)) (dezimal)"
         case .lautstärkeController:
             return "Lautstärke CC7 = \(b.daten)"
         case .pan:
@@ -182,29 +183,37 @@ public enum Befehlskatalog {
     /// Velocity aus dem Datenbyte des Befehls `0C`.
     ///
     /// **Am Original gemessen** (OctaMED im Amiga-Emulator, MIDI-Ausgang mit
-    /// MIDI Monitor mitgelesen, 2026-10-01):
+    /// MIDI Monitor mitgelesen, 2026-10-01). Entscheidend: *dieselben*
+    /// Patterndaten, nur der Anzeigemodus umgeschaltet:
     ///
-    /// | gespeicherter Wert | gesendete Velocity |
-    /// |---|---|
-    /// | 40 | 79 |
-    /// | 64 (`$40`) | 127 |
-    /// | 65–127 (`$41`–`$7F`) | 127 |
+    /// | gespeichertes Byte | Modus | gesendete Velocity |
+    /// |---|---|---|
+    /// | `0x40` | hex | 127 |
+    /// | `0x40` | dezimal | **79** |
     ///
-    /// Das ist `wert × 127 / 64`, bei 127 begrenzt — **nicht** die Verdopplung
-    /// und nicht Tutkas `wert × 128 / 96`:
+    /// Der Modus wird also beim Abspielen ausgewertet. Das Byte hält die
+    /// **Ziffern**, nicht den Zahlenwert: `0x40` bedeutet im Hex-Modus 64, im
+    /// Dezimalmodus 40. Beide Fälle ergeben dann dieselbe Umrechnung:
     ///
-    ///     40 × 127 / 64 = 79,375 → 79     (×2 ergäbe 80, Tutka 53)
     ///     64 × 127 / 64 = 127
-    ///     65 × 127 / 64 = 129   → 127
+    ///     40 × 127 / 64 = 79,375 → 79
     ///
-    /// **Folge, die hörbar ist:** Werte über 64 sättigen alle bei 127. In
-    /// `final_manchmaltriffteinlächeln2001.med` betrifft das 76 % aller
-    /// Velocities, in `final_soverloren.med` 75 % — letztere Datei behält nur
-    /// noch zwei verschiedene Velocities. Das ist kein Fehler des Exports,
-    /// sondern die Eigenschaft des Originals: OctaMED hat diese Werte damals
-    /// ebenso gesättigt.
-    public static func velocity(ausBefehlsdaten wert: UInt8) -> UInt8 {
-        UInt8(min((Int(wert) * 127 + 32) / 64, 127))
+    /// Der Modus steht als `FLAG_VOLHEX` (0x10) in `MMD0song.flags`.
+    ///
+    /// **Abschneiden, nicht runden.** Ganzzahlig abgeschnitten gilt
+    ///
+    ///     ⌊v × 127 / 64⌋ = 2v − 1     für v = 1 … 64
+    ///
+    /// weil `v × 127/64 = 2v − v/64` und `v/64` dort zwischen 0 und 1 liegt.
+    /// Die Verdopplung mit Nullbasis und diese Formel sind also **dieselbe
+    /// Funktion** — kein Messwert kann sie trennen. (Hinweis des Autors.)
+    /// Mit Rundung käme bei `v = 32` fälschlich 64 statt 63 heraus.
+    ///
+    /// Tutkas `× 128/96` ergäbe bei 40 den Wert 53 und bleibt damit widerlegt.
+    public static func velocity(ausBefehlsdaten byte: UInt8,
+                                hexModus: Bool) -> UInt8 {
+        let wert = hexModus ? Int(byte) : Int(byte >> 4) * 10 + Int(byte & 0x0F)
+        return UInt8(min(wert * 127 / 64, 127))
     }
 
     /// Instrument-Grundlautstärke `svol` (0–64) in den MIDI-Bereich.

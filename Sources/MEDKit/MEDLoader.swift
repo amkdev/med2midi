@@ -57,7 +57,7 @@ public enum MEDLoader {
         let zeilenProBeat = Int(flags2 & 0x1F) + 1
         let bpmModus = flags2 & 0x20 != 0
         let mixingModus = flags2 & 0x80 != 0
-        _ = flags   // FLAG_8CHANNEL u. a. sind für MIDI ohne Belang
+        let lautstärkeHex = flags & 0x10 != 0   // FLAG_VOLHEX
 
         // --- Erweiterungsstruktur -------------------------------------------
         var songName = ""
@@ -183,7 +183,8 @@ public enum MEDLoader {
         // --- Diagnose ---------------------------------------------------------
         var diagnose = Diagnose(warnungen: warnungen, hinweise: hinweise,
                                 befehlsStatistik: [:], befehlsFundstellen: [:])
-        werteAus(blöcke: blöcke, instrumente: instrumente, cmd3x: cmd3x, in: &diagnose)
+        werteAus(blöcke: blöcke, instrumente: instrumente, cmd3x: cmd3x,
+                 lautstärkeHex: lautstärkeHex, in: &diagnose)
         hinweise = diagnose.hinweise
 
         return Song(
@@ -193,6 +194,7 @@ public enum MEDLoader {
             standardTempo: standardTempo, ticksProZeile: tempo2,
             bpmModus: bpmModus, zeilenProBeat: zeilenProBeat,
             songTransponierung: songTransponierung, mixingModus: mixingModus,
+            lautstärkeHex: lautstärkeHex,
             instrumente: instrumente, blöcke: blöcke,
             playsequenzen: playsequenzen, sections: sections,
             dumps: dumps, cmd3xController: cmd3x, diagnose: diagnose)

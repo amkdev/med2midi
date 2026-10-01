@@ -77,15 +77,25 @@ enum Testmaterial {
 }
 
 @Test func velocityNachMessungAmOriginal() {
-    // Am Amiga gemessen: 40 -> 79, 64 -> 127, 65..127 -> 127.
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 40) == 79)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 64) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 65) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 127) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0) == 0)
-    // Die beiden verworfenen Formeln ergaeben hier andere Werte.
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 40) != 80)   // nicht x2
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 40) != 53)   // nicht Tutka
+    // Am Amiga gemessen: Byte 0x40 ergibt im Hex-Modus 127, im Dezimalmodus 79.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, hexModus: true) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, hexModus: false) == 79)
+    // Werte über 64 saettigen — vom Autor bestaetigt: "41-7F = vel 127".
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x41, hexModus: true) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x7F, hexModus: true) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0, hexModus: true) == 0)
+}
+
+@Test func velocityIstVerdopplungMitNullbasis() {
+    // Abgeschnitten gilt floor(v * 127/64) == 2v - 1 fuer v = 1...64.
+    // Beide Beschreibungen meinen dieselbe Funktion; mit Rundung waere es
+    // eine andere, und bei v = 32 kaeme faelschlich 64 statt 63 heraus.
+    for v in 1...64 {
+        let erwartet = UInt8(2 * v - 1)
+        #expect(Befehlskatalog.velocity(ausBefehlsdaten: UInt8(v), hexModus: true) == erwartet,
+                "v = \(v)")
+    }
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 32, hexModus: true) == 63)
 }
 
 @Test func svolNachMIDI() {

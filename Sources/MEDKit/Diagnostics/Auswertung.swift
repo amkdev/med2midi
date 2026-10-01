@@ -4,12 +4,13 @@ extension MEDLoader {
     /// Befehlsstatistik, Warnungen und Hinweise über alle Blöcke.
     static func werteAus(blöcke: [Block], instrumente: [Instrument],
                          cmd3x: [(typ: UInt8, nummer: UInt16)],
+                         lautstärkeHex: Bool,
                          in diagnose: inout Diagnose) {
         var statistik: [UInt8: Int] = [:]
         var fundstellen: [UInt8: [Fundstelle]] = [:]
         var unbekannt: [UInt8: (anzahl: Int, orte: [Fundstelle])] = [:]
         var ohneWirkung: [UInt8: Int] = [:]
-        var velocityÜber = 0
+        var velocityWerte: [UInt8: Int] = [:]
         var cmd3xFehlt: Set<UInt8> = []
         var notenProInstrument: [UInt8: Int] = [:]
         var werteProBefehl: [UInt8: Set<UInt8>] = [:]
@@ -44,7 +45,7 @@ extension MEDLoader {
                         case .ohneWirkungBeiMIDI:
                             ohneWirkung[b.nummer, default: 0] += 1
                         case .velocity:
-                            if b.daten > 64 { velocityÜber += 1 }
+                            velocityWerte[b.daten, default: 0] += 1
                         case .freierController:
                             if cmd3x.isEmpty { cmd3xFehlt.insert(b.nummer) }
                         default: break
@@ -69,10 +70,30 @@ extension MEDLoader {
                 art: .cmd3xFehlt(befehl: nummer),
                 fundstellen: fundstellen[nummer] ?? [], anzahl: statistik[nummer] ?? 0))
         }
-        if velocityÜber > 0 {
-            diagnose.warnungen.append(Warnung(
-                art: .velocityÜberBereich(wert: 64),
-                fundstellen: fundstellen[0x0C] ?? [], anzahl: velocityÜber))
+        // Sättigt die Lesart laut Flag auffällig viel stärker als die andere,
+        // wurde vermutlich der Anzeigemodus umgeschaltet, ohne die Werte zu
+        // konvertieren. OctaMED wertet FLAG_VOLHEX beim Abspielen aus, nicht
+        // nur bei der Anzeige — am Original gemessen.
+        let gesamt = velocityWerte.values.reduce(0, +)
+        if gesamt > 50 {
+            func sättigung(hex: Bool) -> Int {
+                let satt = velocityWerte
+                    .filter { Befehlskatalog.velocity(ausBefehlsdaten: $0.key, hexModus: hex) >= 127 }
+                    .values.reduce(0, +)
+                return satt * 100 / gesamt
+            }
+            let laut = sättigung(hex: lautstärkeHex)
+            let andere = sättigung(hex: !lautstärkeHex)
+            if laut >= 50, laut - andere >= 30 {
+                diagnose.warnungen.append(Warnung(
+                    art: .volhexUnplausibel(laut: lautstärkeHex ? "hexadezimal" : "dezimal",
+                                            sättigungLaut: laut, sättigungAndere: andere),
+                    fundstellen: fundstellen[0x0C] ?? [], anzahl: gesamt))
+            } else if laut > 0 {
+                diagnose.hinweise.append(Hinweis(
+                    text: "\(laut) % der Velocities sättigen bei 127 "
+                        + "(Lautstärke-Flag: \(lautstärkeHex ? "hexadezimal" : "dezimal"))"))
+            }
         }
 
         // Noten auf Instrumenten ohne MIDI-Kanal gehen beim Export verloren.

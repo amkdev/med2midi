@@ -136,74 +136,84 @@ Tutka hat CC7 also um genau eine Stelle zu tief eingeordnet.
 ## Befehl `0C` (Velocity) — am Original gemessen
 
 **Gemessen am 2026-10-01**: OctaMED im Amiga-Emulator, MIDI-Ausgang mit
-MIDI Monitor mitgelesen.
+MIDI Monitor mitgelesen. Entscheidend war der zweite Durchgang mit
+**denselben Patterndaten**, nur der Anzeigemodus umgeschaltet:
 
-| gespeicherter Wert | gesendete Velocity |
-|---|---|
-| 40 | **79** |
-| 64 (`$40`) | 127 |
-| 65–127 (`$41`–`$7F`) | 127 |
+| gespeichertes Byte | Modus | gesendete Velocity |
+|---|---|---|
+| `0x40` | hex | 127 |
+| `0x40` | dezimal | **79** |
+| `0x41`–`0x7F` | hex | 127 (gesättigt) |
 
-Daraus folgt eindeutig `wert × 127 / 64`, bei 127 begrenzt:
+### Der Anzeigemodus wird beim Abspielen ausgewertet
+
+Dasselbe Byte ergibt je nach Modus eine andere Velocity. Das Byte hält also die
+**Ziffern**, nicht den Zahlenwert: `0x40` bedeutet im Hex-Modus 64, im
+Dezimalmodus 40. Der Modus steht als `FLAG_VOLHEX` (0x10) in
+`MMD0song.flags` — er ist damit **nicht** nur eine Anzeigeeinstellung und muss
+beim Export ausgewertet werden.
+
+### Die Umrechnung
 
 ```
-40 × 127 / 64 = 79,375 → 79
-64 × 127 / 64 = 127
-65 × 127 / 64 = 129   → 127
+velocity = min(⌊wert × 127 / 64⌋, 127)
 ```
 
-**Damit sind alle bisherigen Annahmen widerlegt**, auch meine beiden:
+Ganzzahlig abgeschnitten ist das **identisch** mit „verdoppeln, von null
+gezählt":
 
-| Formel | bei Wert 40 | Status |
-|---|---|---|
-| durchreichen | 40 | falsch |
-| `× 2` | 80 | falsch (um 1 daneben) |
-| Tutka `× 128/96` | 53 | falsch |
-| **`× 127/64`** | **79** | **gemessen** |
+```
+⌊v × 127/64⌋ = 2v − 1     für v = 1 … 64
+```
 
-Umsetzung: `Befehlskatalog.velocity(ausBefehlsdaten:)`, mit Rundung
-(`(wert × 127 + 32) / 64`).
+denn `v × 127/64 = 2v − v/64`, und `v/64` liegt dort zwischen 0 und 1. Beide
+Beschreibungen meinen dieselbe Funktion; kein Messwert kann sie trennen.
+(Hinweis des Autors — eine frühere Fassung hier behauptete fälschlich, die
+Verdopplung sei widerlegt.)
 
-### Die Hex/Dez-Einstellung
+**Abschneiden, nicht runden.** Mit Rundung käme bei `v = 32` der Wert 64 statt
+63 heraus. Ein Test prüft die Gleichheit über den ganzen Bereich.
 
-Der Autor beobachtete, dass dieselbe Eingabe „C40" in den beiden Anzeigemodi
-verschiedene Velocities ergibt — 127 im Hex-Modus, 79 im Dezimalmodus.
+Widerlegt bleibt Tutkas `× 128/96`: das ergäbe bei 40 den Wert 53.
 
-Das erklärt dieselbe Formel ohne Zusatzannahme: „40" bedeutet im Hex-Modus den
-Wert 64, im Dezimalmodus den Wert 40. Es werden also **zwei verschiedene Bytes
-gespeichert**, und beide werden gleich umgerechnet.
+### Wenn das Flag nicht zu den Daten passt
 
-Offen bleibt die schärfere Frage: Ändert das Flag `FLAG_VOLHEX` (0x10 in
-`flags`) die Auswertung **desselben** gespeicherten Bytes? Entscheidbar durch:
-ein Pattern anlegen, nicht verändern, nur den Modus umschalten, erneut
-abspielen. Bleibt die Velocity gleich, ist das Flag für den Export belanglos.
+Fünf der sieben Dateien passen zum Flag. Zwei nicht:
 
-### Was das für die Songs bedeutet
+| Datei | Flag | typische `0C`-Bytes | sättigt laut Flag | andere Lesart |
+|---|---|---|---|---|
+| `N_WOISTDAS_MU80.med` | hex | `27 13 1F 0F 07 73` | 18 % | — |
+| `N_ich_will_neues.mmd1` | hex | `10 20 30 40 08 60` | 22 % | — |
+| `O_Wie_Eine_Marionette.MMD` | dezimal | `40 50 30 60 20 6F` | 5 % | — |
+| `sehnsuchts_blues.MMD1.pp` | dezimal | `30 40 50 60 10 20` | 0 % | — |
+| `unsere_hände_spielen.MMD` | dezimal | `20 30 10 40 50 60` | 0 % | — |
+| **`final_manchmaltriffteinlächeln2001.med`** | **hex** | `50 60 40 70 30 20` | **98 %** | 5 % |
+| **`final_soverloren.med`** | **hex** | `50 40 30 60 70 68` | **91 %** | 2 % |
 
-Werte über 64 sättigen bei 127 — vom Autor bestätigt („41–7F = vel 127").
+Bei den beiden letzten ergibt die Lesart laut Flag ein Stück ohne jede Dynamik.
+Als Dezimalziffern gelesen stehen dort die Leitern 40/50/60/70 — genau das, was
+man im Dezimalmodus tippt. `N_WOISTDAS_MU80.med` zeigt umgekehrt Bytes mit
+Halbbyte `F`, die als Dezimalziffern gar nicht vorkommen können; dort ist der
+Hex-Modus richtig.
 
-| Datei | Anteil > 64 | verschiedene Velocities danach |
-|---|---|---|
-| `final_manchmaltriffteinlächeln2001.med` | 76 % | 24 (von 42 Rohwerten) |
-| `final_soverloren.med` | 75 % | **2** (von 6 Rohwerten) |
-| `O_Wie_Eine_Marionette.MMD` | 40 % | 45 (von 70) |
-| `N_WOISTDAS_MU80.med` | 18 % | 28 (von 58) |
-| `sehnsuchts_blues.MMD1.pp` | 15 % | 46 (von 64) |
-| `unsere_hände_spielen.MMD` | 15 % | 22 (von 58) |
-| `N_ich_will_neues.mmd1` | 7 % | 29 (von 33) |
+Wahrscheinliche Ursache: Der Anzeigemodus wurde umgeschaltet, ohne die Werte
+mit der eingebauten Konvertierfunktion umzurechnen. Beide betroffenen Dateien
+stammen von 2002 und wurden unter Windows bearbeitet.
 
-`final_soverloren.med` behält nur zwei verschiedene Velocities. Das ist **kein
-Fehler des Exports**, sondern die Eigenschaft des Originals: OctaMED hat diese
-Werte damals ebenso gesättigt. Hörbar war der Unterschied nie.
+Die Diagnose meldet das: Sättigt die Lesart laut Flag mindestens 50 % der
+Velocities und mindestens 30 Prozentpunkte mehr als die andere, erscheint eine
+Warnung. Sonst steht die Sättigungsquote als Hinweis.
 
-Die Diagnose meldet Werte über 64 weiterhin, damit das sichtbar bleibt.
+**Zu entscheiden bleibt**, welcher Lesart der Export für diese beiden Dateien
+folgt. Am schnellsten per Gehör: die Datei im Emulator abspielen und hören, ob
+oberhalb von 64 noch Dynamik da ist.
 
 ### Nicht zu verwechseln: `svol`
 
-Die Instrument-Grundlautstärke `svol` (0–64) wird **verdoppelt**, nicht mit
-127/64 gerechnet. Das zeigt das undokumentierte Feld der 24-Byte-`InstrExt`:
-47→94, 49→98, 48→96, 64→127, 32→64, 50→100. Mit `× 127/64` ergäbe 47 den Wert
-93, gemessen ist 94. Zwei verschiedene Größen mit zwei verschiedenen Formeln.
+Die Instrument-Grundlautstärke `svol` (0–64) wird verdoppelt **ohne** die
+Nullbasis: Das undokumentierte Feld der 24-Byte-`InstrExt` zeigt 47→94, 49→98,
+48→96, 64→127, 32→64, 50→100. Mit `⌊v × 127/64⌋` ergäbe 47 den Wert 93,
+gemessen ist 94. Zwei Größen, zwei Formeln.
 
 ## Sample-Instrumente kommen vor — anders als im Projekt-Prompt angenommen
 

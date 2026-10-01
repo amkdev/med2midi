@@ -321,9 +321,12 @@ public enum MEDLoader {
                 raw = Array(r.bytes[dz..<(dz + length)])
             }
             let dump = SysExDump(index: i, name: name, rawData: raw)
-            if !raw.isEmpty && !dump.isComplete {
-                warnings.append(Warning(art: .incompleteDump(index: i),
-                                         locations: [], count: 1))
+            if !raw.isEmpty {
+                let geprüft = dump.check()
+                if !dump.isComplete || !geprüft.isIntact {
+                    warnings.append(Warning(art: .incompleteDump(index: i),
+                                             locations: [], count: 1))
+                }
             }
             result.append(dump)
         }

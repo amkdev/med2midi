@@ -166,6 +166,52 @@ public struct SysExDump: Sendable {
     public var manufacturer: UInt8? {
         rawData.count > 1 ? rawData[1] : nil
     }
+
+    /// Befund der Nachrichtenprüfung.
+    public struct Check: Sendable {
+        public let messages: Int
+        /// Nachrichten, deren deklarierte Byteanzahl zur Datenlänge passt.
+        public let countsValid: Int
+        /// Nachrichten mit gültiger Yamaha-Prüfsumme.
+        public let checksumsValid: Int
+        /// Bytes, die nach der letzten vollständigen Nachricht übrig bleiben.
+        public let trailingBytes: Int
+
+        public var isIntact: Bool {
+            messages > 0 && countsValid == messages
+                && checksumsValid == messages && trailingBytes == 0
+        }
+    }
+
+    /// Prüft jede Nachricht einzeln.
+    ///
+    /// Eine Sollgröße für den ganzen Dump gibt es nicht — jede Nachricht trägt
+    /// ihre Byteanzahl selbst, die Gesamtlänge folgt aus dem Inhalt. Prüfbar
+    /// ist stattdessen jede Nachricht für sich, und das ist stärker.
+    ///
+    /// Aufbau: `F0 43 0n mm bh bl <Adresse+Daten> cs F7`. Die Prüfsumme ist
+    /// Yamahas Zweierkomplement über Byteanzahl, Adresse und Daten:
+    /// `cs = (128 − (Summe & 0x7F)) & 0x7F`.
+    ///
+    /// **Am Material belegt:** Alle 4480 Nachrichten der 11 Dumps bestehen
+    /// beide Prüfungen, ohne Restbyte.
+    public func check() -> Check {
+        var counts = 0, sums = 0
+        let list = messages
+        for m in list {
+            guard m.count >= 11 else { continue }
+            let base = m.startIndex
+            let declared = Int(m[base + 4]) << 8 | Int(m[base + 5])
+            // Byteanzahl zählt die Daten ohne die drei Adressbytes.
+            if m.count - 11 == declared { counts += 1 }
+            var sum = 0
+            for b in m[(base + 4)..<(m.endIndex - 2)] { sum += Int(b) }
+            if (128 - (sum & 0x7F)) & 0x7F == Int(m[m.endIndex - 2]) { sums += 1 }
+        }
+        let consumed = list.reduce(0) { $0 + $1.count }
+        return Check(messages: list.count, countsValid: counts,
+                     checksumsValid: sums, trailingBytes: rawData.count - consumed)
+    }
 }
 
 public struct PlaySequence: Sendable {

@@ -260,6 +260,27 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
     #expect(hashes.count == total, "\(total) Dumps, aber nur \(hashes.count) verschiedene")
 }
 
+@Test func everyDumpMessageIsIntact() throws {
+    // Eine Sollgroesse fuer den ganzen Dump gibt es nicht — jede Nachricht
+    // traegt ihre Byteanzahl selbst. Geprueft wird deshalb jede einzeln:
+    // deklarierte Laenge und Yamaha-Pruefsumme.
+    var total = 0
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        for dump in song.dumps {
+            let check = dump.check()
+            #expect(check.isIntact,
+                    "\(url.lastPathComponent) Dump \(dump.index): "
+                    + "Anzahl \(check.countsValid)/\(check.messages), "
+                    + "Pruefsumme \(check.checksumsValid)/\(check.messages), "
+                    + "\(check.trailingBytes) Restbytes")
+            total += check.messages
+        }
+    }
+    // Am Material: 4480 Nachrichten in 11 Dumps.
+    if total > 0 { #expect(total == 4480, "\(total) Nachrichten statt 4480") }
+}
+
 @Test func svolToMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)

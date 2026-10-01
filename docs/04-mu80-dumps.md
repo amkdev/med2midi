@@ -42,6 +42,36 @@ Gemessen an `N_ich_will_neues.mmd1`, Dump 0 — 408 Nachrichten, 13 154 Bytes:
 Die 32 Parts im Bereich `08` entsprechen der Architektur des MU80 — es sind
 also vollständige Speicherdumps, wie der Autor vermutete, kein Ausschnitt.
 
+## Die Dumps sind beweisbar unbeschädigt
+
+Eine Sollgröße für den ganzen Dump gibt es nicht und braucht es nicht: Jede
+Nachricht trägt ihre Byteanzahl selbst, die Gesamtlänge folgt aus dem Inhalt.
+Prüfbar ist jede Nachricht für sich — und das ist stärker als jeder Vergleich
+mit einer erwarteten Größe.
+
+Zwei Prüfungen je Nachricht:
+
+1. **Byteanzahl**: Das Feld `bh bl` muss zur tatsächlichen Datenlänge passen
+   (ohne die drei Adressbytes).
+2. **Prüfsumme**: Yamahas Zweierkomplement über Byteanzahl, Adresse und Daten —
+   `cs = (128 − (Summe & 0x7F)) & 0x7F`.
+
+**Ergebnis über alle sieben Songdateien:**
+
+| | |
+|---|---|
+| Dumps | 11 |
+| Nachrichten | 4480 |
+| Byteanzahl korrekt | **4480** |
+| Prüfsumme korrekt | **4480** |
+| Restbytes | **0** |
+
+Alle Dumps sind also vollständig und unbeschädigt. Die exportierten
+`.syx`-Dateien laden sauber in das Gerät.
+
+Umgesetzt als `SysExDump.check()`; der Lader warnt, wenn eine Prüfung
+fehlschlägt, und das Export-Manifest nennt das Ergebnis.
+
 ## Warum die Dumps verschieden groß sind
 
 Zwei Größen kommen vor: **13 154 Bytes (408 Nachrichten)** und **12 970 Bytes

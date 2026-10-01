@@ -22,6 +22,8 @@ public enum SysExExport {
         /// Welche Model-IDs vorkommen. `0x4C` = XG, `0x49` = MU80-eigen.
         public let modelIDs: [UInt8]
         public let complete: Bool
+        /// Ergebnis der Nachrichtenprüfung (Byteanzahl und Prüfsumme je Nachricht).
+        public let check: SysExDump.Check
         /// Wird der Dump im Songverlauf per Befehl `10` ausgelöst?
         public let triggeredAt: SourceLocation?
     }
@@ -56,6 +58,7 @@ public enum SysExExport {
                 manufacturer: dump.manufacturer,
                 modelIDs: modelIDs(of: dump),
                 complete: dump.isComplete,
+                check: dump.check(),
                 triggeredAt: triggers[dump.index]))
         }
 
@@ -150,6 +153,11 @@ public enum SysExExport {
             \(d.manufacturer == 0x43 ? " (Yamaha)" : "")
                  Model-IDs  : \(model)
                  Form       : \(d.complete ? "F0 … F7 vollständig" : "UNVOLLSTÄNDIG")
+                 Prüfung    : \(d.check.isIntact
+                     ? "alle \(d.check.messages) Nachrichten fehlerfrei (Byteanzahl und Prüfsumme)"
+                     : "Byteanzahl \(d.check.countsValid)/\(d.check.messages), "
+                       + "Prüfsumme \(d.check.checksumsValid)/\(d.check.messages), "
+                       + "\(d.check.trailingBytes) Restbytes")
                  Status     : \(status)
 
 

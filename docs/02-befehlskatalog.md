@@ -571,3 +571,47 @@ in einem 64-Zeilen-Block ohne Haltezeilen kam das Note-Off beim Neustart des
 Blocks, 11 ms vor dem neuen Note-On — also durch die nächste Note.
 
 Umgesetzt in `MEDKit/Model/Timing.swift`.
+
+### Zwei Nachträge aus dem Originalcode
+
+**`hold = 0` bedeutet unbegrenzt.** Die Routine setzt den Zähler dann auf −1:
+
+```asm
+MOVE.B  trk_inithold(A5),trk_noteoffcnt(A5)
+BNE.S   .f_1fRTS            ; hold != 0 -> fertig
+ST      trk_noteoffcnt(A5)  ; hold == 0 -> $FF
+```
+
+Ein negativer Zähler wird weder verlängert noch heruntergezählt — die Note
+klingt, bis `0F FF` oder die nächste Note sie beendet. Vom Autor bestätigt.
+Hold wirkt dabei auch **ohne** Haltezeilen.
+
+**Die Haltezeilen verlängern den Zähler um je eine Zeile:**
+
+```asm
+TST.B   trk_noteoffcnt(A1)
+BMI.S   .plr_holdendb           ; negativ -> nichts tun
+MOVE.B  (A3),D1                 ; nächste Zeile ansehen
+AND.B   #$3f,D1                 ; Note dort?
+BEQ.S   .plr_holD2b             ; keine -> weiterhalten
+.plr_holD2b:
+ADD.B   D3,trk_noteoffcnt(A1)   ; D3 = tempo2 = TPL Ticks = eine Zeile
+```
+
+Das erklärt die gemessene Formel aus dem Innern des Programms.
+
+**Note und `0F FF` in derselben Zelle:** Der Zweig endet mit `rtplay`, nicht
+`rtnoplay` — das `0F FF` beendet die *vorherige* Note, danach startet die neue.
+Für die neue Note bleibt es wirkungslos.
+
+```asm
+.isfxff:
+    CMP.B   #$ff,D4
+    BNE.S   .f_ff_RTS
+    BSR.W   _ChannelOff
+.f_ff_RTS: rtplay
+```
+
+Der Autor über die Fundstelle in `final_soverloren.med`: „erzeugt kein note off
+— das wird ignoriert, inhaltlicher Fehler des Autors." Der Export darf diese
+Zellen also wie eine gewöhnliche Note behandeln.

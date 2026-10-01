@@ -107,9 +107,26 @@ public enum Timing {
     /// klingt also über die gezeichneten Striche hinaus. Der Autor:
     /// „die pipes sind schon mehrere zeilen vorbei — dann kommt das noteoff."
     ///
+    /// **`hold == 0` bedeutet unbegrenzt** — die Funktion gibt dann `nil`
+    /// zurück. Im Assembler:
+    ///
+    /// ```asm
+    /// MOVE.B  trk_inithold(A5),trk_noteoffcnt(A5)
+    /// BNE.S   .f_1fRTS            ; hold != 0 -> fertig
+    /// ST      trk_noteoffcnt(A5)  ; hold == 0 -> Zähler auf $FF (= -1)
+    /// ```
+    ///
+    /// Ein negativer Zähler wird weder verlängert noch heruntergezählt
+    /// (`TST.B` / `BMI` in `HoldAndFade` und in der Haltezeilen-Prüfung). Vom
+    /// Autor bestätigt: „hold 0 spielt eine note unendlich".
+    ///
+    /// Die Haltezeilen erhöhen den Zähler um je `TPL` Ticks, also um genau
+    /// eine Zeile — `ADD.B D3,trk_noteoffcnt(A1)` mit `D3 = tempo2`.
+    ///
     /// Beendet wird die Note ausserdem durch `0F FF` oder die nächste Note auf
     /// derselben Spur; dann gilt der frühere Zeitpunkt.
     public static func noteDuration(holdRows: Int, hold: UInt8, song: Song) -> Double? {
+        guard hold > 0 else { return nil }      // unbegrenzt
         guard let tick = tickDuration(song: song) else { return nil }
         let row = tick * Double(song.ticksPerRow)
         return Double(holdRows) * row + Double(hold) * tick

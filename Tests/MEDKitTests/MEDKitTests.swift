@@ -183,6 +183,18 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
     }
 }
 
+@Test func holdZeroMeansUnlimited() throws {
+    // Der Assembler setzt den Zaehler bei hold = 0 auf -1; ein negativer
+    // Zaehler wird weder verlaengert noch heruntergezaehlt. Vom Autor
+    // bestaetigt: "hold 0 spielt eine note unendlich".
+    let song = try MEDLoader.load(bytes: syntheticSong(tempo: 33, tpl: 6, lpb: 8, bpm: true))
+    #expect(Timing.noteDuration(holdRows: 15, hold: 0, song: song) == nil)
+    #expect(Timing.noteDuration(holdRows: 0, hold: 0, song: song) == nil)
+    // Ohne Haltezeilen wirkt hold trotzdem.
+    let d = try #require(Timing.noteDuration(holdRows: 0, hold: 64, song: song))
+    #expect(abs(d - 64 * 0.037875) < 0.005)
+}
+
 @Test func holdRowsCountsInstrumentOnlyCells() throws {
     // Die Haltezeilen sind Daten: Zellen mit nur der Instrumentnummer.
     guard let url = TestFiles.file("unsere_hände_spielen.MMD") else { return }

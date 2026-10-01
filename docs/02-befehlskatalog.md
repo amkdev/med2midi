@@ -400,3 +400,84 @@ Kanalwechsel durch solche Zellen gibt es (290, 9, 2), aber nie mit Folgen.
 der Instrumentnummer setzt oder erst beim Spielen einer Note. Da es in diesem
 Material nirgends greift, ist es nicht dringend — für einen vollständigen
 Export aber zu klären.
+
+## Der Originalcode der Playroutine
+
+Gefunden am 2026-10-01: <https://github.com/KONEY/octamed_playroutines_amiga> —
+68k-Assembler der OctaMED-Playroutine, neuer aufbereitet als die Fassung in
+UADE. Die Datei `med/MED_PlayRoutine.i` enthält die Befehlsauswertung.
+
+**Einschränkung:** Zeile 25 der Datei: `KONEY Version 1.2 | 30.04.2022 |
+NO MORE AURA/MIDI CODE | BIG REFACTOR`. Der MIDI-Ausgabepfad wurde entfernt;
+übrig sind nur Datenstrukturen (`trk_prevmidich`, `ext_midipsets`). Die
+Befehlsauswertung davor ist aber gemeinsam und damit verwertbar.
+
+### Befehl `0C` im Original
+
+```asm
+.f_0c:
+    MOVE.B  D4,D0
+    BPL.S   .plr_nosetdefvol      ; Bit 7 gesetzt?
+    AND.B   #$7F,D0               ; ja: Grundlautstärke setzen
+    IFNE CHECK
+      CMP.B #64,D0
+      BGT.S .go_nocmd
+    ENDC
+    MOVE.B  D0,inst_svol(A4,D1.W) ; neue Grundlautstärke
+    BRA.S   .plr_setvol           ; und damit auch spielen
+
+.plr_nosetdefvol:
+    BTST    #4,msng_flags(A4)     ; FLAG_VOLHEX
+    BNE.S   .volhex
+    LSR.B   #4,D0                 ; oberes Halbbyte
+    MULU    #10,D0                ; × 10
+    MOVE.B  D4,D1
+    AND.B   #$0f,D1               ; unteres Halbbyte
+    ADD.B   D1,D0                 ; BCD-Dekodierung
+.volhex:
+    IFNE CHECK
+      CMP.B #64,D0
+      BHI.S .go_nocmd             ; über 64: Befehl verwerfen
+    ENDC
+.plr_setvol:
+    MOVE.B  D0,trk_prevvol(A5)
+```
+
+**Bestätigt:**
+
+- Die **BCD-Dekodierung** bei nicht gesetztem `FLAG_VOLHEX` — genau
+  `(byte >> 4) × 10 + (byte & 0x0F)`, wie aus der Messung erschlossen und wie
+  OpenMPT es implementiert.
+- `FLAG_VOLHEX` ist **Bit 4** von `msng_flags`, also `0x10`.
+- Werte ab `0x80` setzen `inst_svol` (die Grundlautstärke) **und** spielen die
+  Note damit — deckt sich mit Handbuch und der Beobachtung des Autors
+  (`0C90` → Lautstärke 16).
+- `0F FF` ruft `_ChannelOff` (Zeile ~1302).
+
+**Offen geblieben: Werte über 64.** Der Zweig, der den Befehl verwirft
+(`BHI .go_nocmd`), steht in `IFNE CHECK`, und `med_feature_control.i` setzt
+`CHECK EQU 0`. In der ausgelieferten Fassung wird der Wert also ungeprüft
+durchgereicht — weder verworfen noch gedeckelt.
+
+Die Messung des Autors (`0C41`–`0C7F` → Velocity 127) trennt die Deutungen
+nicht: Beim Deckeln kommt 127 heraus; beim Verwerfen bliebe die vorige
+Lautstärke stehen, und die war im Test vermutlich die Grundlautstärke 64 — was
+ebenfalls 127 ergibt.
+
+**Unterscheidender Test:** Instrument-Grundlautstärke auf **16** stellen, dann
+`0C7F` spielen.
+
+| gesendete Velocity | Bedeutung |
+|---|---|
+| 127 | wird gedeckelt (aktuelle Umsetzung) |
+| 31 | wird verworfen, die alte Lautstärke bleibt |
+
+Bis dahin bleibt das Deckeln: OpenMPT macht es ebenso
+(`std::min(param & 0x7F, 64)`), und die Messung widerspricht nicht.
+
+### Was die Routine sonst noch belegt
+
+`med/loadmod.a` erkennt **alle vier Formatversionen** (`MMD0`–`MMD3`,
+Zeilen 97–103) und kennt Befehlsseiten (`numpages`, `pagetable`). Die
+Amiga-Version des Autors kann MMD3-Dateien also laden — die 7-Bit-Frage lässt
+sich dort prüfen, ohne die Windows-Version zum Laufen zu bringen.

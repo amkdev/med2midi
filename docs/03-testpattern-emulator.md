@@ -73,3 +73,35 @@ Zeile 0, Spur 6 (`D-4 6 0FFF`).
 - **Löschverhalten**: Eine Note mit Instrument setzen, dann nur die Note
   löschen — bleibt die Instrumentnummer stehen? Das würde die tausenden
   Zellen erklären (siehe `02-befehlskatalog.md`).
+
+
+## Nachtrag: zwei Tests aus dem Originalcode
+
+### Werden Lautstärkewerte über 64 gedeckelt oder verworfen?
+
+Der Assemblercode der Playroutine stellt den Befehl bei Werten über 64 unter
+einen Schalter, der in der ausgelieferten Fassung abgeschaltet ist
+(`CHECK EQU 0`). Die bisherige Messung trennt die Fälle nicht.
+
+1. Instrument 1: **Grundlautstärke auf 16** stellen (Instrumenten-Parameter).
+2. Pattern: `C-4 1 0C7F`
+3. MIDI Monitor ablesen.
+
+| Velocity | Bedeutung |
+|---|---|
+| 127 | gedeckelt — die aktuelle Umsetzung stimmt |
+| 31 | verworfen — die Grundlautstärke 16 bleibt stehen (16 × 2 − 1) |
+
+### Klingt die 7-Bit-Lautstärke der MMD3-Dateien richtig?
+
+Die Amiga-Version lädt MMD3 (`loadmod.a` prüft alle vier Kennungen). Also:
+
+1. `final_soverloren.med` in OctaMED auf dem Amiga laden.
+2. Abspielen und hinhören, ob oberhalb von Wert 64 noch Dynamik da ist.
+
+Dort liegen drei Viertel aller Velocities über 64. Hört man Abstufungen, ist
+die 7-Bit-Lesart richtig (aktuelle Umsetzung). Klingt alles gleich laut, wird
+doch gedeckelt — dann stimmt etwas an der Erkennung über `cmdExtTableOffset`
+nicht.
+
+Das erspart den Umweg über Windows unter UTM oder Wine.

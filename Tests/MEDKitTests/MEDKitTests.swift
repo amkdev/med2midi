@@ -269,11 +269,11 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
         let song = try MEDLoader.load(file: url)
         for dump in song.dumps {
             let check = dump.check()
-            #expect(check.isIntact,
-                    "\(url.lastPathComponent) Dump \(dump.index): "
-                    + "Anzahl \(check.countsValid)/\(check.messages), "
-                    + "Pruefsumme \(check.checksumsValid)/\(check.messages), "
-                    + "\(check.trailingBytes) Restbytes")
+            let befund = "\(url.lastPathComponent) Dump \(dump.index): "
+                + "Anzahl \(check.countsValid)/\(check.messages), "
+                + "Pruefsumme \(check.checksumsValid)/\(check.messages), "
+                + "\(check.trailingBytes) Restbytes"
+            #expect(check.isIntact, "\(befund)")
             total += check.messages
         }
     }

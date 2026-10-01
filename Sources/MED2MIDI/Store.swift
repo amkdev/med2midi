@@ -125,9 +125,13 @@ final class Store {
     /// viele Zeilen auf einen Beat gehen. Sonst rechnet OctaMED wie
     /// ProTracker mit Ticks.
     ///
-    /// **Ungeprüft**: gegen den Emulator noch nicht abgeglichen. Tempowechsel
-    /// per Befehl 0F und 09 sind hier ebenfalls noch nicht berücksichtigt —
-    /// das gehört in die Player-Simulation der Phase 2.
+    /// **Am Original bestätigt** (2026-10-01): Für `O_Wie_Eine_Marionette.MMD`
+    /// zeigt das Tempo-Fenster in OctaMED Tempo 066, TPL 005, LPB 015 — genau
+    /// die hier gelesenen Werte. Die `+1`-Umrechnung von `flags2` („0 = 1
+    /// line") stimmt also.
+    ///
+    /// **Noch nicht berücksichtigt:** Tempowechsel per Befehl `0F` und `09`.
+    /// Das gehört in die Player-Simulation der Phase 2.
     var secondsPerRow: Double? {
         guard let s = current?.song else { return nil }
         if s.bpmMode {

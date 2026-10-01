@@ -425,3 +425,31 @@ ablegt, kennt sie nicht.
 
 Die Amiga-Version kann die 7-Bit-Lautstärke also gar nicht auswerten. Für den
 Export dieser drei Dateien ist damit allein die Windows-Semantik maßgeblich.
+
+## 7. Zeitrechnung am Original bestätigt
+
+Der Autor hat das Tempo-Fenster von OctaMED für `O_Wie_Eine_Marionette.MMD`
+fotografiert. Alle drei Felder decken sich mit dem, was der Parser liest:
+
+| Feld | OctaMED | Parser | Herkunft |
+|---|---|---|---|
+| Tempo | 066 | 66 | `MMD0song.deftempo` |
+| TPL | 005 | 5 | `MMD0song.tempo2` |
+| LPB | 015 | 15 | `flags2 & 0x1F` = 14, **+1** |
+
+Damit ist die `+1`-Umrechnung des LPB-Feldes belegt — die Spezifikation sagt
+„0 = 1 line, $1F = 32 lines", und 15 ist kein Lesefehler, sondern die
+Einstellung des Autors für dieses langsame Stück.
+
+Zeilendauer im BPM-Modus:
+
+```
+Sekunden pro Zeile = 60 / (BPM × LPB)
+                   = 60 / (66 × 15) = 0,0606 s
+```
+
+Ein Block mit 512 Zeilen dauert damit 31 Sekunden.
+
+**Noch offen:** Tempowechsel per Befehl `0F` und `09` während des Stücks. Die
+Zeitanzeige der App rechnet mit dem Grundtempo; die Player-Simulation der
+Phase 2 muss die Wechsel mitführen.

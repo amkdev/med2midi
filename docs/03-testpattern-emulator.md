@@ -105,3 +105,39 @@ doch gedeckelt — dann stimmt etwas an der Erkennung über `cmdExtTableOffset`
 nicht.
 
 Das erspart den Umweg über Windows unter UTM oder Wine.
+
+## Hold-Einheit: Messprotokoll
+
+Ein erster Versuch war nicht auswertbar, weil die Noten von etwas anderem
+beendet wurden: `hold = 1` ergab 1,656 s, wo eine Tick-Zählung 0,013 s
+erwarten liesse.
+
+### Aufbau
+
+- Ein Block mit **mindestens 64 Zeilen**.
+- **Eine** Note in Zeile 0, MIDI-Instrument, sonst nichts im Block.
+- **Kein** `0FFF`, keine weitere Note, keine Befehle.
+- **Schleife aus** — sonst beendet der Neustart des Blocks den Ton.
+
+### Aufzuschreiben
+
+1. **Tempo, TPL und LPB** des Testsongs (Tempo-Fenster). Ohne diese drei Zahlen
+   lässt sich aus einer Sekundendauer keine Einheit ableiten.
+2. Je `hold`-Wert der Abstand zwischen `Note On` und `Note Off` aus
+   MIDI Monitor.
+3. Werte verdoppelnd durchgehen: `hold` = 1, 2, 4, 8, 16, 32, 64.
+
+### Auswertung
+
+Zeilendauer = `60 / (BPM × LPB)`, Tickdauer = Zeilendauer / TPL.
+
+| Dauer wächst mit | Bedeutung |
+|---|---|
+| `hold × Tickdauer` | Hold zählt Ticks |
+| `hold × Zeilendauer` | Hold zählt Zeilen |
+| gar nicht linear | Hold ist ein Mindestwert, nicht die Dauer |
+
+Zur Einordnung des ersten Versuchs (Tempo 98, TPL 6, LPB 8 — Zeile 0,0765 s,
+Tick 0,0128 s): `hold = 32` ergab 2,276 s. Eine Zeilen-Zählung sagt 2,449 s
+voraus, eine Tick-Zählung 0,41 s. Die Zeilen-Deutung liegt nur 7 % daneben,
+die Tick-Deutung um das Fünffache.

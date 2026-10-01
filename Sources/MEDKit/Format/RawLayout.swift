@@ -6,11 +6,11 @@ import Foundation
 /// im Kommentar `/* n */` jeder Strukturzeile stehen.
 enum Layout {
     /// `struct MMD0` — 52 Bytes.
-    enum Modul {
+    enum Module {
         static let id = 0, modlen = 4, song = 8, blockarr = 16
         static let mmdflags = 20, smplarr = 24, expdata = 32
         static let extraSongs = 51
-        static let größe = 52
+        static let size = 52
     }
 
     /// `struct MMD0song` / `struct MMD2song` — beide 788 Bytes.
@@ -29,14 +29,14 @@ enum Layout {
         static let deftempo = 764, playtransp = 766, flags = 767
         static let flags2 = 768, tempo2 = 769
         static let mastervol = 786, numsamples = 787
-        static let größe = 788
+        static let size = 788
     }
 
     /// `struct MMD0sample` — 8 Bytes je Instrument.
     enum Sample {
         static let rep = 0, replen = 2, midich = 4, midipreset = 5
         static let svol = 6, strans = 7
-        static let größe = 8
+        static let size = 8
     }
 
     /// `struct MMD0exp` — 84 Bytes.
@@ -47,7 +47,7 @@ enum Layout {
         static let jumpmask = 28, rgbtable = 32, channelsplit = 36
         static let nInfo = 40, songname = 44, songnamelen = 48
         static let dumps = 52, mmdinfo = 56, mmdrexx = 60, mmdcmd3x = 64
-        static let größe = 84
+        static let size = 84
     }
 
     /// `struct InstrExt` — variable Größe, siehe `s_ext_entrsz`.
@@ -60,7 +60,7 @@ enum Layout {
         static let longRepeat = 10, longReplen = 14                      // ab V7
         /// Undokumentiert, nur in 24-Byte-Varianten. Gemessen: `svol * 2`,
         /// gedeckelt bei 127 — die Instrumentlautstärke im MIDI-Bereich.
-        static let midiLautstärke = 18
+        static let midiVolume = 18
     }
 
     /// `struct BlockInfo` — 36 Bytes, hinter `MMD1Block.info`.
@@ -71,7 +71,7 @@ enum Layout {
         /// Parameterbyte je Zelle). Gefunden über OpenMPT
         /// `Load_med.cpp`, `MMDBlockInfo.cmdExtTableOffset`.
         static let cmdExtTable = 16
-        static let größe = 36
+        static let size = 36
     }
 
     /// `struct MMDDumpData` — 8 Bytes, danach `numdumps` Zeiger.
@@ -80,7 +80,7 @@ enum Layout {
     /// `struct MMDDump`
     enum Dump {
         static let length = 0, data = 4, extLen = 8, name = 10
-        static let nameLänge = 20
+        static let nameLength = 20
     }
 
     /// `struct MMDMIDICmd3x`
@@ -91,7 +91,7 @@ enum Layout {
 
     /// `struct PlaySeq` (MMD2/MMD3)
     enum PlaySeq {
-        static let name = 0, nameLänge = 32
+        static let name = 0, nameLength = 32
         static let length = 40, seqAb = 42
     }
 }

@@ -12,64 +12,64 @@ struct MED2MIDIApp: App {
 
     var body: some Scene {
         Window("MED2MIDI", id: "haupt") {
-            Hauptansicht()
+            MainView()
                 .environment(store)
                 .frame(minWidth: 1000, minHeight: 640)
                 .task { NSApp.activate(ignoringOtherApps: true) }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Öffnen …") { store.öffnenDialog() }
+                Button("Öffnen …") { store.showOpenPanel() }
                     .keyboardShortcut("o")
             }
             CommandMenu("Navigation") {
-                Button("Nächster Block (Songreihenfolge)") { store.weiterInSongreihenfolge(1) }
+                Button("Nächster Block (Songreihenfolge)") { store.stepInSongOrder(1) }
                     .keyboardShortcut(.rightArrow, modifiers: [.command])
-                Button("Voriger Block (Songreihenfolge)") { store.weiterInSongreihenfolge(-1) }
+                Button("Voriger Block (Songreihenfolge)") { store.stepInSongOrder(-1) }
                     .keyboardShortcut(.leftArrow, modifiers: [.command])
                 Divider()
-                Button("Blockanfang") { store.position.zeile = 0 }
+                Button("Blockanfang") { store.position.row = 0 }
                     .keyboardShortcut(.upArrow, modifiers: [.command])
             }
         }
     }
 }
 
-struct Hauptansicht: View {
+struct MainView: View {
     @Environment(Store.self) private var store
-    @State private var blockEingabe = ""
+    @State private var blockInput = ""
 
     var body: some View {
         @Bindable var store = store
         NavigationSplitView {
-            seitenleiste
+            sidebar
         } detail: {
-            if let geladen = store.aktiv {
+            if let loaded = store.current {
                 VStack(spacing: 0) {
-                    werkzeugleiste(geladen.song)
+                    toolbar(loaded.song)
                     Divider()
                     TabView {
-                        patternSeite(geladen.song)
+                        patternTab(loaded.song)
                             .tabItem { Label("Pattern", systemImage: "tablecells") }
-                        SonginfoAnsicht(song: geladen.song)
+                        SongInfoView(song: loaded.song)
                             .tabItem { Label("Song", systemImage: "info.circle") }
                     }
                 }
             } else {
-                leerAnsicht
+                emptyView
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            store.lade(urls.filter { $0.isFileURL }); return true
+            store.load(urls.filter { $0.isFileURL }); return true
         }
         .alert("Fehler beim Laden", isPresented: .init(
-            get: { store.fehler != nil }, set: { if !$0 { store.fehler = nil } })
+            get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })
         ) {
-            Button("OK") { store.fehler = nil }
-        } message: { Text(store.fehler ?? "") }
+            Button("OK") { store.errorMessage = nil }
+        } message: { Text(store.errorMessage ?? "") }
     }
 
-    private var leerAnsicht: some View {
+    private var emptyView: some View {
         VStack(spacing: 12) {
             Image(systemName: "pianokeys").font(.system(size: 44)).foregroundStyle(.secondary)
             Text("Songs hierher ziehen oder ⌘O").foregroundStyle(.secondary)
@@ -77,9 +77,9 @@ struct Hauptansicht: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var seitenleiste: some View {
+    private var sidebar: some View {
         @Bindable var store = store
-        return List(selection: $store.auswahl) {
+        return List(selection: $store.selection) {
             ForEach(store.songs) { g in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(g.url.lastPathComponent).lineLimit(1)
@@ -87,8 +87,8 @@ struct Hauptansicht: View {
                         Text(g.song.version.name)
                             .padding(.horizontal, 4).padding(.vertical, 1)
                             .background(.quaternary, in: .rect(cornerRadius: 3))
-                        if !g.song.diagnose.warnungen.isEmpty {
-                            Label("\(g.song.diagnose.warnungen.count)",
+                        if !g.song.diagnostics.warnings.isEmpty {
+                            Label("\(g.song.diagnostics.warnings.count)",
                                   systemImage: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.orange)
                         }
@@ -97,92 +97,92 @@ struct Hauptansicht: View {
                 }
                 .tag(g.id)
                 .contextMenu {
-                    Button("Schließen") { store.schließe(g.id) }
+                    Button("Schließen") { store.close(g.id) }
                 }
             }
         }
         .navigationSplitViewColumnWidth(min: 190, ideal: 230)
-        .onChange(of: store.auswahl) { _, _ in store.springeAnSongAnfang() }
+        .onChange(of: store.selection) { _, _ in store.goToSongStart() }
     }
 
-    private func werkzeugleiste(_ song: Song) -> some View {
+    private func toolbar(_ song: Song) -> some View {
         @Bindable var store = store
-        let folge = store.songFolge
+        let order = store.songOrder
         return HStack(spacing: 12) {
             HStack(spacing: 4) {
-                Button { store.weiterInSongreihenfolge(-1) } label: {
+                Button { store.stepInSongOrder(-1) } label: {
                     Image(systemName: "chevron.left")
                 }
-                .disabled(store.position.sequenzPosition <= 0)
-                Text("Sequenz \(store.position.sequenzPosition + 1)/\(max(folge.count, 1))")
+                .disabled(store.position.sequencePosition <= 0)
+                Text("Sequenz \(store.position.sequencePosition + 1)/\(max(order.count, 1))")
                     .font(.callout.monospacedDigit())
-                Button { store.weiterInSongreihenfolge(1) } label: {
+                Button { store.stepInSongOrder(1) } label: {
                     Image(systemName: "chevron.right")
                 }
-                .disabled(store.position.sequenzPosition >= folge.count - 1)
+                .disabled(store.position.sequencePosition >= order.count - 1)
             }
 
             Divider().frame(height: 18)
 
             HStack(spacing: 4) {
                 Text("Block")
-                TextField("", text: $blockEingabe)
+                TextField("", text: $blockInput)
                     .frame(width: 46)
-                    .onSubmit { if let n = Int(blockEingabe) { store.zuBlock(n) } }
-                Text("/ \(song.blöcke.count - 1)").foregroundStyle(.secondary)
+                    .onSubmit { if let n = Int(blockInput) { store.goToBlock(n) } }
+                Text("/ \(song.blocks.count - 1)").foregroundStyle(.secondary)
             }
 
-            if let b = store.aktiverBlock, b.seitenAnzahl > 1 {
+            if let b = store.currentBlock, b.pageCount > 1 {
                 Divider().frame(height: 18)
-                Picker("Seite", selection: $store.position.seite) {
-                    ForEach(0..<b.seitenAnzahl, id: \.self) { Text("Seite \($0 + 1)").tag($0) }
+                Picker("Seite", selection: $store.position.page) {
+                    ForEach(0..<b.pageCount, id: \.self) { Text("Seite \($0 + 1)").tag($0) }
                 }
                 .pickerStyle(.segmented).frame(width: 180)
             }
 
             Spacer()
 
-            positionsanzeige
-            Toggle("Farben", isOn: $store.spurenEinfärben).toggleStyle(.switch)
+            positionDisplay
+            Toggle("Farben", isOn: $store.colourTracks).toggleStyle(.switch)
         }
         .padding(.horizontal, 12).padding(.vertical, 7)
-        .onChange(of: store.position.block) { _, neu in blockEingabe = "\(neu)" }
-        .onAppear { blockEingabe = "\(store.position.block)" }
+        .onChange(of: store.position.block) { _, neu in blockInput = "\(neu)" }
+        .onAppear { blockInput = "\(store.position.block)" }
     }
 
-    private var positionsanzeige: some View {
+    private var positionDisplay: some View {
         HStack(spacing: 10) {
-            beschriftet("Zeile", String(format: "%03d / %03d", store.position.zeile,
-                                        max(0, (store.aktiverBlock?.zeilen ?? 1) - 1)))
-            beschriftet("Takt.Beat", store.taktUndBeat)
-            beschriftet("Zeit", store.zeitImBlock)
+            labelled("Zeile", String(format: "%03d / %03d", store.position.row,
+                                        max(0, (store.currentBlock?.rows ?? 1) - 1)))
+            labelled("Takt.Beat", store.barAndBeat)
+            labelled("Zeit", store.timeInBlock)
         }
         .font(.system(size: 11, design: .monospaced))
     }
 
-    private func beschriftet(_ name: String, _ wert: String) -> some View {
+    private func labelled(_ name: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(name).font(.system(size: 9)).foregroundStyle(.secondary)
-            Text(wert)
+            Text(value)
         }
     }
 
-    private func patternSeite(_ song: Song) -> some View {
+    private func patternTab(_ song: Song) -> some View {
         Group {
-            if let block = store.aktiverBlock, block.zeilen > 0 {
+            if let block = store.currentBlock, block.rows > 0 {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Block \(block.nummer)")
+                        Text("Block \(block.number)")
                             .font(.headline)
                         if !block.name.isEmpty {
                             Text("„\(block.name)“").foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("\(block.spuren) Spuren · \(block.zeilen) Zeilen")
+                        Text("\(block.tracks) Spuren · \(block.rows) Zeilen")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 12).padding(.vertical, 5)
-                    PatternAnsicht(song: song, block: block)
+                    PatternView(song: song, block: block)
                 }
             } else {
                 Text("Block \(store.position.block) ist leer")

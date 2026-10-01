@@ -3,21 +3,21 @@ import Foundation
 /// Ein Befehl aus einer Pattern-Zelle: Nummer plus Datenbyte.
 ///
 /// Ab MMD1 ist die Nummer ein volles Byte (0x00–0xFF); in MMD0 nur 4 Bit.
-public struct Befehl: Equatable, Hashable, Sendable {
-    public let nummer: UInt8
-    public let daten: UInt8
+public struct Command: Equatable, Hashable, Sendable {
+    public let number: UInt8
+    public let data: UInt8
 
-    public init(nummer: UInt8, daten: UInt8) {
-        self.nummer = nummer
-        self.daten = daten
+    public init(number: UInt8, data: UInt8) {
+        self.number = number
+        self.data = data
     }
 
     /// Eine Zelle ohne Befehl. Achtung: Befehl `00` mit Datenbyte ≠ 0 ist ein
     /// echter Befehl (MIDI-Controller-Wert) und darf nicht als leer gelten.
-    public var istLeer: Bool { nummer == 0 && daten == 0 }
+    public var isEmpty: Bool { number == 0 && data == 0 }
 
     public var hex: String {
-        String(format: "%02X%02X", nummer, daten)
+        String(format: "%02X%02X", number, data)
     }
 }
 
@@ -30,156 +30,156 @@ public struct Befehl: Equatable, Hashable, Sendable {
 /// MIDI-Instrumente. Dieses Projekt wertet ausschließlich die MIDI-Seite aus.
 /// Tutkas `conversion.cpp` ist an fünf Stellen falsch (05, 0A, 16, 17, 1C) —
 /// siehe docs/02-befehlskatalog.md.
-public enum MIDIWirkung: Equatable, Sendable {
-    case controllerWert                  // 00 — Wert für die mit 05 gewählte Nummer
-    case pitchbendAuf                    // 01
-    case pitchbendAb                     // 02
-    case pitchbendSetzen                 // 03, 13
-    case modulationsrad                  // 04 -> CC1
-    case controllerNummer                // 05
-    case playseqSprung                   // 0B
-    case holdSetzen                      // 08 (Decay gibt es bei MIDI nicht)
-    case ticksProZeile                   // 09
-    case polyphonerAftertouch            // 0A
+public enum MIDIEffect: Equatable, Sendable {
+    case controllerValue                  // 00 — Wert für die mit 05 gewählte Nummer
+    case pitchBendUp                    // 01
+    case pitchBendDown                     // 02
+    case setPitchBend                 // 03, 13
+    case modulationWheel                  // 04 -> CC1
+    case controllerNumber                // 05
+    case playSequenceJump                   // 0B
+    case setHold                      // 08 (Decay gibt es bei MIDI nicht)
+    case ticksPerRow                   // 09
+    case polyphonicAftertouch            // 0A
     case velocity                        // 0C
-    case kanalAftertouch                 // 0D
+    case channelAftertouch                 // 0D
     case pan                             // 0E -> CC10
-    case tempoOderSonderfall             // 0F
-    case sysexSenden                     // 10
-    case lautstärkeController            // 17 -> CC7
-    case blockWiederholen                // 16
+    case tempoOrSpecial             // 0F
+    case sendSysEx                     // 10
+    case volumeController            // 17 -> CC7
+    case repeatRows                // 16
     case midiPreset                      // 1C
-    case sprungNächsteSequenz            // 1D
-    case zeileWiederholen                // 1E
-    case verzögernOderRetrigger          // 1F
-    case freierController(index: Int)    // 31–3F, Nummer aus MMDMIDICmd3x
-    case ohneWirkungBeiMIDI              // 15, 18, 19, 1A, 1B
-    case unbekannt
+    case jumpToNextSequence            // 1D
+    case repeatRow                // 1E
+    case delayOrRetrigger          // 1F
+    case assignableController(index: Int)    // 31–3F, Nummer aus MMDMIDICmd3x
+    case noEffectOnMIDI              // 15, 18, 19, 1A, 1B
+    case unknown
 }
 
 /// Sonderwerte des Befehls `0F`. Quelle: Anhang A, "Command 0F".
-public enum TempoSonderfall: Equatable, Sendable {
-    case retriggerZweimal        // F1
-    case verzögernHalbeZeile     // F2
-    case retriggerDreimal        // F3
-    case verzögernEinDrittel     // F4
-    case verzögernZweiDrittel    // F5
-    case wartenBisGesendet       // F7
-    case holdPedalAn             // FA
-    case holdPedalAus            // FB
-    case songAnhalten            // FE
-    case noteStoppen             // FF
-    case tempoSetzen(UInt8)
+public enum TempoSpecial: Equatable, Sendable {
+    case retriggerTwice        // F1
+    case delayHalfRow     // F2
+    case retriggerThreeTimes        // F3
+    case delayOneThirdRow     // F4
+    case delayTwoThirdsRow    // F5
+    case waitUntilSent       // F7
+    case holdPedalOn             // FA
+    case holdPedalOff            // FB
+    case stopSong            // FE
+    case stopNote             // FF
+    case setTempo(UInt8)
 
-    public init(daten: UInt8) {
-        switch daten {
-        case 0xF1: self = .retriggerZweimal
-        case 0xF2: self = .verzögernHalbeZeile
-        case 0xF3: self = .retriggerDreimal
-        case 0xF4: self = .verzögernEinDrittel
-        case 0xF5: self = .verzögernZweiDrittel
-        case 0xF7: self = .wartenBisGesendet
-        case 0xFA: self = .holdPedalAn
-        case 0xFB: self = .holdPedalAus
-        case 0xFE: self = .songAnhalten
-        case 0xFF: self = .noteStoppen
-        default:   self = .tempoSetzen(daten)
+    public init(data: UInt8) {
+        switch data {
+        case 0xF1: self = .retriggerTwice
+        case 0xF2: self = .delayHalfRow
+        case 0xF3: self = .retriggerThreeTimes
+        case 0xF4: self = .delayOneThirdRow
+        case 0xF5: self = .delayTwoThirdsRow
+        case 0xF7: self = .waitUntilSent
+        case 0xFA: self = .holdPedalOn
+        case 0xFB: self = .holdPedalOff
+        case 0xFE: self = .stopSong
+        case 0xFF: self = .stopNote
+        default:   self = .setTempo(data)
         }
     }
 }
 
-public enum Befehlskatalog {
+public enum CommandCatalog {
     /// MIDI-Bedeutung einer Befehlsnummer.
-    public static func midiWirkung(_ nummer: UInt8) -> MIDIWirkung {
-        switch nummer {
-        case 0x00: return .controllerWert
-        case 0x01: return .pitchbendAuf
-        case 0x02: return .pitchbendAb
-        case 0x03, 0x13: return .pitchbendSetzen
-        case 0x04: return .modulationsrad
-        case 0x05: return .controllerNummer
-        case 0x08: return .holdSetzen
-        case 0x09: return .ticksProZeile
-        case 0x0A: return .polyphonerAftertouch
-        case 0x0B: return .playseqSprung
+    public static func midiEffect(_ number: UInt8) -> MIDIEffect {
+        switch number {
+        case 0x00: return .controllerValue
+        case 0x01: return .pitchBendUp
+        case 0x02: return .pitchBendDown
+        case 0x03, 0x13: return .setPitchBend
+        case 0x04: return .modulationWheel
+        case 0x05: return .controllerNumber
+        case 0x08: return .setHold
+        case 0x09: return .ticksPerRow
+        case 0x0A: return .polyphonicAftertouch
+        case 0x0B: return .playSequenceJump
         case 0x0C: return .velocity
-        case 0x0D: return .kanalAftertouch
+        case 0x0D: return .channelAftertouch
         case 0x0E: return .pan
-        case 0x0F: return .tempoOderSonderfall
-        case 0x10: return .sysexSenden
-        case 0x15, 0x18, 0x19, 0x1A, 0x1B: return .ohneWirkungBeiMIDI
-        case 0x16: return .blockWiederholen
-        case 0x17: return .lautstärkeController
+        case 0x0F: return .tempoOrSpecial
+        case 0x10: return .sendSysEx
+        case 0x15, 0x18, 0x19, 0x1A, 0x1B: return .noEffectOnMIDI
+        case 0x16: return .repeatRows
+        case 0x17: return .volumeController
         case 0x1C: return .midiPreset
-        case 0x1D: return .sprungNächsteSequenz
-        case 0x1E: return .zeileWiederholen
-        case 0x1F: return .verzögernOderRetrigger
-        case 0x31...0x3F: return .freierController(index: Int(nummer - 0x31))
-        default: return .unbekannt
+        case 0x1D: return .jumpToNextSequence
+        case 0x1E: return .repeatRow
+        case 0x1F: return .delayOrRetrigger
+        case 0x31...0x3F: return .assignableController(index: Int(number - 0x31))
+        default: return .unknown
         }
     }
 
     /// Kurze Erklärung für die Pattern-Ansicht (Mouseover).
-    public static func erklärung(_ b: Befehl) -> String {
-        switch midiWirkung(b.nummer) {
-        case .controllerWert:
+    public static func explanation(_ b: Command) -> String {
+        switch midiEffect(b.number) {
+        case .controllerValue:
             // Handbuch: "If you need to use a controller value of $00 … use level 80."
-            let wert = b.daten == 0x80 ? 0 : Int(b.daten)
-            return "Controller-Wert \(wert) (Nummer zuvor mit 05 gesetzt)"
-        case .controllerNummer:
-            return "Controller-Nummer auf CC\(b.daten) setzen"
+            let value = b.data == 0x80 ? 0 : Int(b.data)
+            return "Controller-Wert \(value) (Nummer zuvor mit 05 gesetzt)"
+        case .controllerNumber:
+            return "Controller-Nummer auf CC\(b.data) setzen"
         case .velocity:
-            if let g = grundlautstärke(ausBefehlsdaten: b.daten) {
+            if let g = defaultVolumeSetting(ausBefehlsdaten: b.data) {
                 return "Grundlautstärke des Instruments auf \(g) setzen"
             }
-            return "Velocity \(velocity(ausBefehlsdaten: b.daten, lesart: .siebenBit)) "
-                 + "(7 Bit) · \(velocity(ausBefehlsdaten: b.daten, lesart: .hexadezimal)) (hex) "
-                 + "· \(velocity(ausBefehlsdaten: b.daten, lesart: .dezimal)) (dezimal)"
-        case .lautstärkeController:
-            return "Lautstärke CC7 = \(b.daten)"
+            return "Velocity \(velocity(ausBefehlsdaten: b.data, lesart: .sevenBit)) "
+                 + "(7 Bit) · \(velocity(ausBefehlsdaten: b.data, lesart: .hexadecimal)) (hex) "
+                 + "· \(velocity(ausBefehlsdaten: b.data, lesart: .decimal)) (dezimal)"
+        case .volumeController:
+            return "Lautstärke CC7 = \(b.data)"
         case .pan:
-            return "Pan CC10 = \(b.daten)"
-        case .modulationsrad:
-            return "Modulation CC1 = \(b.daten)"
-        case .holdSetzen:
-            return "Hold = \(b.daten)"
-        case .ticksProZeile:
-            return "Ticks pro Zeile = \(b.daten)"
-        case .polyphonerAftertouch:
-            return "Polyphoner Aftertouch \(b.daten)"
-        case .kanalAftertouch:
-            return "Kanal-Aftertouch \(b.daten)"
-        case .pitchbendAuf:   return "Pitchbend aufwärts, \(Int(b.daten) * 8) Schritte je Tick"
-        case .pitchbendAb:    return "Pitchbend abwärts, \(Int(b.daten) * 8) Schritte je Tick"
-        case .pitchbendSetzen: return "Pitchbend auf \(Int8(bitPattern: b.daten))"
-        case .sysexSenden:    return "SysEx-Dump Nr. \(b.daten) senden"
-        case .midiPreset:     return "MIDI-Preset \(b.daten)"
-        case .blockWiederholen: return "Blockabschnitt wiederholen (\(b.daten))"
-        case .sprungNächsteSequenz: return "Sprung zur nächsten Sequenz, Zeile \(b.daten)"
-        case .zeileWiederholen: return "Zeile \(b.daten)-mal wiederholen"
-        case .playseqSprung:  return "Sprung zu Playseq-Position \(b.daten)"
-        case .verzögernOderRetrigger:
-            return b.daten > 15 ? "Note um \(b.daten >> 4) Ticks verzögern"
-                                : "Note \(b.daten)-fach retriggern"
-        case .freierController(let i):
-            return "Freier Controller #\(i + 1) = \(b.daten) (Nummer aus Cmd3x-Tabelle)"
-        case .tempoOderSonderfall:
-            switch TempoSonderfall(daten: b.daten) {
-            case .noteStoppen:          return "Note auf dieser Spur stoppen"
-            case .songAnhalten:         return "Song anhalten"
-            case .retriggerZweimal:     return "Note zweimal spielen"
-            case .retriggerDreimal:     return "Note dreimal spielen"
-            case .verzögernHalbeZeile:  return "Note um halbe Zeile verzögern"
-            case .verzögernEinDrittel:  return "Note um ein Drittel Zeile verzögern"
-            case .verzögernZweiDrittel: return "Note um zwei Drittel Zeile verzögern"
-            case .wartenBisGesendet:    return "Warten, bis Nachrichten gesendet sind"
-            case .holdPedalAn:          return "Hold-Pedal an"
-            case .holdPedalAus:         return "Hold-Pedal aus"
-            case .tempoSetzen(let t):   return "Tempo = \(t)"
+            return "Pan CC10 = \(b.data)"
+        case .modulationWheel:
+            return "Modulation CC1 = \(b.data)"
+        case .setHold:
+            return "Hold = \(b.data)"
+        case .ticksPerRow:
+            return "Ticks pro Zeile = \(b.data)"
+        case .polyphonicAftertouch:
+            return "Polyphoner Aftertouch \(b.data)"
+        case .channelAftertouch:
+            return "Kanal-Aftertouch \(b.data)"
+        case .pitchBendUp:   return "Pitchbend aufwärts, \(Int(b.data) * 8) Schritte je Tick"
+        case .pitchBendDown:    return "Pitchbend abwärts, \(Int(b.data) * 8) Schritte je Tick"
+        case .setPitchBend: return "Pitchbend auf \(Int8(bitPattern: b.data))"
+        case .sendSysEx:    return "SysEx-Dump Nr. \(b.data) senden"
+        case .midiPreset:     return "MIDI-Preset \(b.data)"
+        case .repeatRows: return "Blockabschnitt wiederholen (\(b.data))"
+        case .jumpToNextSequence: return "Sprung zur nächsten Sequenz, Zeile \(b.data)"
+        case .repeatRow: return "Zeile \(b.data)-mal wiederholen"
+        case .playSequenceJump:  return "Sprung zu Playseq-Position \(b.data)"
+        case .delayOrRetrigger:
+            return b.data > 15 ? "Note um \(b.data >> 4) Ticks verzögern"
+                                : "Note \(b.data)-fach retriggern"
+        case .assignableController(let i):
+            return "Freier Controller #\(i + 1) = \(b.data) (Nummer aus Cmd3x-Tabelle)"
+        case .tempoOrSpecial:
+            switch TempoSpecial(data: b.data) {
+            case .stopNote:          return "Note auf dieser Spur stoppen"
+            case .stopSong:         return "Song anhalten"
+            case .retriggerTwice:     return "Note zweimal spielen"
+            case .retriggerThreeTimes:     return "Note dreimal spielen"
+            case .delayHalfRow:  return "Note um halbe Zeile verzögern"
+            case .delayOneThirdRow:  return "Note um ein Drittel Zeile verzögern"
+            case .delayTwoThirdsRow: return "Note um zwei Drittel Zeile verzögern"
+            case .waitUntilSent:    return "Warten, bis Nachrichten gesendet sind"
+            case .holdPedalOn:          return "Hold-Pedal an"
+            case .holdPedalOff:         return "Hold-Pedal aus"
+            case .setTempo(let t):   return "Tempo = \(t)"
             }
-        case .ohneWirkungBeiMIDI:
+        case .noEffectOnMIDI:
             return "ohne Wirkung bei MIDI-Instrumenten"
-        case .unbekannt:
+        case .unknown:
             return "unbekannter Befehl"
         }
     }
@@ -188,15 +188,15 @@ public enum Befehlskatalog {
     ///
     /// OctaMED kennt drei Fälle. Welcher gilt, hängt von `FLAG_VOLHEX` und
     /// davon ab, ob der Block eine Befehlserweiterung trägt.
-    public enum Lautstärkelesart: Sendable, Equatable {
+    public enum VolumeEncoding: Sendable, Equatable {
         /// Block hat eine Befehlserweiterung (`cmdExtTableOffset`): das Byte
         /// ist bereits der 7-Bit-Wert 0–127, also direkt MIDI-Velocity.
-        case siebenBit
+        case sevenBit
         /// `FLAG_VOLHEX` gesetzt: das Byte ist ein Hexwert 0–64.
-        case hexadezimal
+        case hexadecimal
         /// `FLAG_VOLHEX` nicht gesetzt: die beiden Halbbytes sind
         /// Dezimalziffern, `0x40` bedeutet also 40.
-        case dezimal
+        case decimal
     }
 
     /// Velocity aus dem Datenbyte des Befehls `0C`.
@@ -216,7 +216,7 @@ public enum Befehlskatalog {
     /// Beide Beschreibungen meinen dieselbe Funktion. Abschneiden, nicht
     /// runden: mit Rundung käme bei `v = 32` fälschlich 64 statt 63 heraus.
     ///
-    /// Im Fall `.siebenBit` wird **nicht** skaliert — der Wert ist bereits die
+    /// Im Fall `.sevenBit` wird **nicht** skaliert — der Wert ist bereits die
     /// Velocity. Quelle: OpenMPT `Load_med.cpp`, Befehl 0x0C, dritte
     /// Verzweigung (`(param & 0x7F + 1) / 2` rechnet dort auf die interne
     /// 0–64-Skala herunter).
@@ -226,21 +226,21 @@ public enum Befehlskatalog {
     /// sieben Testdateien kommt das in über 11 000 `0C`-Befehlen **kein
     /// einziges Mal** vor; die Diagnose meldet es, falls doch.
     public static func velocity(ausBefehlsdaten byte: UInt8,
-                                lesart: Lautstärkelesart) -> UInt8 {
+                                lesart: VolumeEncoding) -> UInt8 {
         if byte >= 0x80 { return 0 }   // setzt die Grundlautstärke, keine Note
         switch lesart {
-        case .siebenBit:
+        case .sevenBit:
             return byte & 0x7F
-        case .hexadezimal:
+        case .hexadecimal:
             return UInt8(min(min(Int(byte), 64) * 127 / 64, 127))
-        case .dezimal:
-            let wert = Int(byte >> 4) * 10 + Int(byte & 0x0F)
-            return UInt8(min(wert * 127 / 64, 127))
+        case .decimal:
+            let value = Int(byte >> 4) * 10 + Int(byte & 0x0F)
+            return UInt8(min(value * 127 / 64, 127))
         }
     }
 
     /// Grundlautstärke, die ein `0C`-Wert ab `0x80` setzt (0–64), sonst `nil`.
-    public static func grundlautstärke(ausBefehlsdaten byte: UInt8) -> UInt8? {
+    public static func defaultVolumeSetting(ausBefehlsdaten byte: UInt8) -> UInt8? {
         byte >= 0x80 ? min(byte - 0x80, 64) : nil
     }
 
@@ -250,7 +250,7 @@ public enum Befehlskatalog {
     /// Feld der 24-Byte-`InstrExt` enthält genau diesen Wert, und der Vergleich
     /// ergab `svol × 2`, gedeckelt bei 127 — 47→94, 49→98, 48→96, 64→127,
     /// 32→64, 50→100. Alle sechs Messwerte passen.
-    public static func midiLautstärke(ausSvol svol: UInt8) -> UInt8 {
+    public static func midiVolume(ausSvol svol: UInt8) -> UInt8 {
         UInt8(min(Int(svol) * 2, 127))
     }
 }

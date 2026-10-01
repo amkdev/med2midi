@@ -32,7 +32,7 @@ Gemessen an `N_ich_will_neues.mmd1`, Dump 0 — 408 Nachrichten, 13 154 Bytes:
 | `4C` | `02 xx xx` | 7 | 178 | Effekt |
 | `4C` | `03 xx xx` | 2 | 46 | Effekt |
 | `4C` | `08 xx xx` | 64 | 4032 | **Multi Part, alle 32 Parts** |
-| `4C` | `10 xx xx` | 4 | 184 | **unbekannt**, nur 2 Parts |
+| `4C` | `10 xx xx` | 4 | 184 | A/D Part (Audio-Eingänge), 2 Parts |
 | `4C` | `30 xx xx` | 83 | 2177 | Drum Setup 1 |
 | `4C` | `31 xx xx` | 82 | 2166 | Drum Setup 2 |
 | `4C` | `32 xx xx` | 82 | 2166 | Drum Setup 3 |
@@ -82,19 +82,31 @@ Zwei Größen kommen vor: **13 154 Bytes (408 Nachrichten)** und **12 970 Bytes
 10 00 00    10 00 30    10 01 00    10 01 30
 ```
 
-Also zwei Parts aus einem Adressbereich, der sonst nicht vorkommt. Der Autor:
-„man konnte da verschiedenes dumpen" — vermutlich hat er bei manchen Songs eine
-andere Dump-Art gewählt.
+Also zwei Parts aus einem Adressbereich, der sonst nicht vorkommt.
+
+**Aufgelöst:** `10 00 00` ist **A/D1**, `10 01 00` ist **A/D2** — die
+Audio-Eingänge des MU80, die XG wie Parts behandelt. Je Eingang zwei
+Adressblöcke (`00` und `30`), macht vier Nachrichten.
+
+Das XG-Format kennt die Bulk-Dumps einzeln: XG System, System Information,
+Multi Effect 1, Multi EQ, Multi Effect 2, Multi Part, **AD Part**, Drums Setup.
+Das deckt sich mit der Auskunft des Autors, am Gerät habe man verschiedenes
+dumpen können — bei manchen Songs hat er den A/D-Part mitgenommen, bei anderen
+nicht.
+
+Für die Songs ist der Unterschied bedeutungslos: Die Audio-Eingänge wurden nicht
+benutzt, die 184 Bytes betreffen Einstellungen für Mikrofon oder Line-Signal.
+
+*Quelle: midi.org, „Specific Yamaha XG SYSEX". Sekundärquelle, nicht das
+MU80-Handbuch — die Zuordnung passt aber exakt zu den gemessenen zwei Parts.*
 
 ## Offen
 
-1. **Was ist Adressbereich `10 xx xx`?** Vier Nachrichten, zwei Parts. Im
-   MU80-Handbuch (Anhang MIDI-Datenformat) nachzuschlagen.
-2. **Was steht in der einen `49`-Nachricht?** MU80-eigenes Format, 21 Bytes.
-3. **Die Adresstabellen selbst** — erst damit wird aus dem Dump eine lesbare
+1. **Was steht in der einen `49`-Nachricht?** MU80-eigenes Format, 21 Bytes.
+2. **Die Adresstabellen selbst** — erst damit wird aus dem Dump eine lesbare
    Klangtabelle: Bank, Programm, Voice-Name, Volume, Pan, Sends, Filter,
    Hüllkurve je Part.
 
-Für Punkt 3 braucht es den MIDI-Datenformat-Anhang des MU80-Handbuchs und die
+Für Punkt 2 braucht es den MIDI-Datenformat-Anhang des MU80-Handbuchs und die
 XG-Spezifikation. Ohne die bleibt es beim Rohstrom — der aber bereits
 exportiert wird und sich in das Gerät zurückspielen lässt.

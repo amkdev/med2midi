@@ -27,28 +27,49 @@ public enum Timing {
     /// Initialisierung nennt alternativ 474326 für 715 909 Hz (NTSC).
     public static let ciaClockPAL = 709_379.0
     static let timerDiv = 470_000.0
-    /// Für den BPM-Modus; aus dem Assembler nicht ablesbar, aber so gewählt,
-    /// dass sich die übliche Beziehung `60 / (BPM × LPB)` je Zeile ergibt.
-    static let bpmDivFallback = 0.0
+    /// `bpmdiv: DC.L 3546895/2` — der halbe PAL-Farbträgertakt.
+    static let bpmDiv = Double(3_546_895 / 2)
 
     /// Dauer eines Ticks in Sekunden.
     ///
-    /// **SPD-Modus** am Original gerechnet: Tempo 33 ergibt Periode
-    /// `470000 / 33 = 14242`, also `709379 / 14242 = 49,81` Ticks je Sekunde —
-    /// die klassischen 50 Hz des Amiga.
+    /// **BPM-Modus.** `_SetTempo` setzt die CIA-Periode auf
+    /// `bpmdiv / (Tempo × LPB)` mit `bpmdiv = 3546895/2 = 1773447`. Der
+    /// Interrupt-Handler teilt zusätzlich durch vier (`bpmcounter`), der Timer
+    /// feuert dort also viermal je Spieltick:
     ///
-    /// **BPM-Modus**: Eine Zeile dauert `60 / (BPM × LPB)`, ein Tick davon den
-    /// `ticksPerRow`-ten Teil. Am Original bestätigt für
-    /// `O_Wie_Eine_Marionette.MMD` (Tempo 66, TPL 5, LPB 15).
+    /// ```asm
+    /// SUBQ.B  #1,bpmcounter
+    /// BLE.S   .plr_bpmcnt0
+    /// BRA.W   .plr_exit
+    /// .plr_bpmcnt0:
+    /// MOVE.B  #4,bpmcounter
+    /// ```
+    ///
+    /// Mit dem PAL-E-Takt 709 379 Hz ergibt das
+    ///
+    ///     Tickrate = 709379 × (Tempo × LPB) / (1773447 × 4) = (Tempo × LPB) / 10 Hz
+    ///
+    /// Eine Zeile dauert `TPL` Ticks (`mmd_counter` zählt bis `tempo2`), also
+    /// `TPL × 10 / (Tempo × LPB)`.
+    ///
+    /// **Achtung:** Die verbreitete Formel `60 / (BPM × LPB)` stimmt nur bei
+    /// `TPL = 6`. Bei `O_Wie_Eine_Marionette.MMD` (TPL 5) liegt sie um 20 %
+    /// daneben — 60,6 statt 50,5 ms je Zeile.
+    ///
+    /// **SPD-Modus.** Periode `timerdiv / Tempo` mit `timerdiv = 470000`, ohne
+    /// den Vierer-Teiler. Tempo 33 ergibt 49,81 Ticks je Sekunde — die
+    /// klassischen 50 Hz des Amiga.
     public static func tickDuration(song: Song) -> Double? {
         guard song.ticksPerRow > 0 else { return nil }
         if song.bpmMode {
-            let bpm = Double(song.defaultTempo)
-            guard bpm > 0, song.rowsPerBeat > 0 else { return nil }
-            return 60.0 / (bpm * Double(song.rowsPerBeat)) / Double(song.ticksPerRow)
+            let product = Double(song.defaultTempo) * Double(song.rowsPerBeat)
+            guard product > 0 else { return nil }
+            let period = (bpmDiv / product).rounded(.down)
+            guard period > 0 else { return nil }
+            return period * 4 / ciaClockPAL
         }
         // SPD-Modus. Tempo ≤ 10 benutzt eine Tabelle der SoundTracker-Tempi;
-        // die ist hier noch nicht umgesetzt, kommt im Material aber nicht vor.
+        // die ist hier nicht umgesetzt, kommt im Material aber nicht vor.
         let tempo = Double(song.defaultTempo)
         guard tempo > 10 else { return nil }
         let period = (timerDiv / tempo).rounded(.down)
@@ -56,7 +77,8 @@ public enum Timing {
         return period / ciaClockPAL
     }
 
-    /// Dauer einer Pattern-Zeile in Sekunden.
+    /// Dauer einer Pattern-Zeile in Sekunden. `mmd_counter` zählt bis
+    /// `tempo2` (TPL), eine Zeile dauert also so viele Ticks.
     public static func rowDuration(song: Song) -> Double? {
         guard let t = tickDuration(song: song) else { return nil }
         return t * Double(song.ticksPerRow)

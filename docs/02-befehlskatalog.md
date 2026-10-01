@@ -443,40 +443,78 @@ Zeilen 97–103) und kennt Befehlsseiten (`numpages`, `pagetable`). Die
 Amiga-Version des Autors kann MMD3-Dateien also laden — die 7-Bit-Frage lässt
 sich dort prüfen, ohne die Windows-Version zum Laufen zu bringen.
 
-## Zeitrechnung und Hold — aus der Playroutine und am Original gemessen
+## Zeitrechnung und Hold — aus der Playroutine, am Original gemessen
 
-### Die beiden Tempomodi
+### Die Tickrate
 
-`MED_PlayRoutine.i`, `_SetTempo`. OctaMED stellt den CIA-Timer ein; dessen
-Periode bestimmt die Tickrate.
+`MED_PlayRoutine.i`, `_SetTempo` und `_IntHandler`.
 
 ```asm
-.ST_bpm:                   ; BPM-Modus
+.ST_bpm:                       ; BPM-Modus
     MOVE.B  msng_flags2(A0),D1
     AND.W   #$1F,D1
-    ADDQ.B  #1,D1          ; LPB = (flags2 & 0x1F) + 1
-    MULU    D1,D0          ; Tempo × LPB
-    MOVE.L  bpmdiv,D1
-    DIVU    D0,D1
+    ADDQ.B  #1,D1              ; LPB = (flags2 & 0x1F) + 1
+    MULU    D1,D0              ; Tempo × LPB
+    MOVE.L  bpmdiv,D1          ; bpmdiv = 3546895/2 = 1773447
+    DIVU    D0,D1              ; Periode
 
-.calctempo:                ; SPD-Modus, Tempo > 10
-    MOVE.L  timerdiv,D1    ; timerdiv = 470000
-    DIVU    D0,D1          ; Periode = timerdiv / Tempo
+.calctempo:                    ; SPD-Modus, Tempo > 10
+    MOVE.L  timerdiv,D1        ; timerdiv = 470000
+    DIVU    D0,D1              ; Periode = timerdiv / Tempo
 ```
 
-Die `ADDQ.B #1` im BPM-Zweig **bestätigt die +1-Umrechnung des LPB-Feldes
-direkt im Originalcode** — unabhängig von der Messung am Tempo-Fenster.
+Im **BPM-Modus** teilt der Interrupt-Handler zusätzlich durch vier:
 
-Für Tempo ≤ 10 im SPD-Modus gibt es eine Tabelle der SoundTracker-Tempi
-(2417, 4833, 7250 …). Im Testmaterial kommt das nicht vor.
+```asm
+_IntHandler:
+    SUBQ.B  #1,bpmcounter
+    BLE.S   .plr_bpmcnt0
+    BRA.W   .plr_exit          ; sonst raus
+    .plr_bpmcnt0:
+    MOVE.B  #4,bpmcounter
+```
 
-**SPD-Tempo 33** (Vorgabe eines neuen Songs): Periode `470000/33 = 14242`, bei
-709 379 Hz CIA-Takt also **49,81 Ticks je Sekunde**, ein Tick **20,08 ms** —
-die klassischen 50 Hz des Amiga.
+Mit dem PAL-E-Takt 709 379 Hz folgt daraus
+
+```
+Tickrate = 709379 × (Tempo × LPB) / (1773447 × 4) = (Tempo × LPB) / 10  Hz
+```
+
+Eine Zeile dauert `TPL` Ticks — `mmd_counter` zählt bis `tempo2`:
+
+```
+Zeilendauer = TPL × 10 / (Tempo × LPB)
+```
+
+**Die verbreitete Formel `60 / (BPM × LPB)` stimmt nur bei `TPL = 6`.**
+
+| Datei | TPL | nach `60/(BPM×LPB)` | richtig |
+|---|---|---|---|
+| Testsong (BPM 33, LPB 8) | 6 | 227,27 ms | 227,25 ms |
+| `O_Wie_Eine_Marionette.MMD` (BPM 66, LPB 15) | **5** | 60,61 ms | **50,50 ms** |
+
+Bei Marionette liegt die alte Formel um 20 % daneben — ein 512-Zeilen-Block
+dauert 25,9 s statt 31,0 s. Für die Tempo-Map des Exports wäre das ein echter
+Fehler gewesen.
+
+**Am Original geprüft:** Ein 64-Zeilen-Block lief in **14,547 s** durch
+(Note On 18:29:38.399 → Note Off 18:29:52.946), bei BPM 33, TPL 6, LPB 8. Das
+sind 227,297 ms je Zeile; die Formel sagt 227,252 ms — **0,02 % Abweichung**.
+
+Im **SPD-Modus** entfällt der Vierer-Teiler. Tempo 33 ergibt Periode
+`470000/33 = 14242`, also 49,81 Ticks je Sekunde — die klassischen 50 Hz.
+Für Tempo ≤ 10 gibt es eine Tabelle der SoundTracker-Tempi (2417, 4833, 7250 …);
+im Testmaterial kommt das nicht vor.
+
+Alle sieben Songdateien des Autors stehen im **BPM-Modus**.
 
 ### Hold zählt Ticks
 
-Am Original gemessen, Testsong im SPD-Modus:
+`DoFX` ruft `HoldAndFade` einmal je Spieltick; dort wird `trk_noteoffcnt`
+um eins verringert. Hold ist also eine Tickzahl.
+
+Messung des Autors, Testsong im SPD-Modus (Vorgabe eines neuen Songs,
+Tempo 33 → Tick 20,08 ms):
 
 | `hold` | Notenlänge |
 |---|---|
@@ -484,20 +522,24 @@ Am Original gemessen, Testsong im SPD-Modus:
 | 32 | 2,276 s |
 | **Differenz** | **0,620 s** |
 
-31 Ticks × 20,08 ms = **0,6224 s**. Abweichung 0,4 %.
+31 Ticks × 20,08 ms = 0,622 s — Abweichung 0,4 %. Beide Messungen zerlegen sich
+als `1,634 s + hold × Tickdauer`; der gleichbleibende Sockel war das, was die
+Note sonst beendet hat. **Hold wirkt zusätzlich, nicht ausschliesslich** — und
+war deshalb im ersten Versuch fast unsichtbar.
 
-Beide Messungen zerlegen sich als
+In den Songs des Autors steht `hold` meist auf 6 bei `TPL = 6`, also genau eine
+Zeile; 12 sind zwei Zeilen, die 64 in Marionette sind 12,8 Zeilen.
 
-```
-Dauer = 1,634 s + hold × Tickdauer
-```
+### Was eine Note beendet
 
-Der Sockel von 1,634 s ist in beiden Fällen gleich — das war, was die Note
-sonst beendet hat. **Hold wirkt zusätzlich, nicht ausschliesslich**, und war
-deshalb im ersten Versuch fast unsichtbar: Der Sockel war achtmal so groß wie
-der Effekt.
+| Mechanismus | |
+|---|---|
+| `hold > 0` | Note klingt `hold` Ticks |
+| `0F FF` | beendet sofort (`_ChannelOff`) |
+| nächste Note auf derselben Spur | beendet |
 
-Das erklärt auch, warum die Pipe-Anzeige in alten Songs erscheint und sich in
-einem neuen nicht durch Tippen erzeugen lässt — sie stellt diesen Zustand dar.
+Am Original bestätigt: Bei einer einzelnen Note in einem 64-Zeilen-Block kam das
+Note-Off beim Neustart des Blocks, 11 ms vor dem neuen Note-On — also durch die
+nächste Note, nicht durch Hold.
 
 Umgesetzt in `MEDKit/Model/Timing.swift`.

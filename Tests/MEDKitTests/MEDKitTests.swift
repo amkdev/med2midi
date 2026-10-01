@@ -122,27 +122,54 @@ enum TestFiles {
 }
 
 @Test func timingMatchesTheOriginal() throws {
-    // BPM-Modus: am Tempo-Fenster von OctaMED bestaetigt —
-    // O_Wie_Eine_Marionette.MMD zeigt dort Tempo 066, TPL 005, LPB 015.
-    guard let url = TestFiles.file("O_Wie_Eine_Marionette.MMD") else { return }
-    let song = try MEDLoader.load(file: url)
-    #expect(song.bpmMode)
-    #expect(song.defaultTempo == 66)
-    #expect(song.ticksPerRow == 5)
-    #expect(song.rowsPerBeat == 15)
+    // Am Original gemessen: ein 64-Zeilen-Block lief in 14,547 s durch
+    // (Note On 18:29:38.399 bis Note Off 18:29:52.946), bei BPM 33, TPL 6,
+    // LPB 8 laut Tempo-Fenster. Das sind 227,297 ms je Zeile.
+    let song = try MEDLoader.load(bytes: syntheticSong(tempo: 33, tpl: 6, lpb: 8, bpm: true))
     let row = try #require(Timing.rowDuration(song: song))
-    #expect(abs(row - 60.0 / (66.0 * 15.0)) < 1e-9)
+    #expect(abs(row - 0.227297) < 0.0005, "berechnet \(row * 1000) ms")
 }
 
-@Test func spdTimingFollowsTheCIATimer() {
-    // SPD-Modus, Tempo 33 (Vorgabe eines neuen Songs): die Playroutine setzt
-    // die CIA-Periode auf 470000/33 = 14242, bei 709379 Hz also 49,81 Ticks
-    // je Sekunde — die klassischen 50 Hz.
-    let period = (470_000.0 / 33.0).rounded(.down)
-    let tick = period / Timing.ciaClockPAL
+@Test func tplAffectsRowDurationInBPMMode() throws {
+    // Die verbreitete Formel 60/(BPM*LPB) stimmt nur bei TPL = 6. Der
+    // Interrupt-Handler teilt im BPM-Modus durch vier und mmd_counter zaehlt
+    // bis TPL — die Zeilendauer ist also TPL * 10 / (BPM * LPB).
+    let sechs = try MEDLoader.load(bytes: syntheticSong(tempo: 66, tpl: 6, lpb: 15, bpm: true))
+    let fuenf = try MEDLoader.load(bytes: syntheticSong(tempo: 66, tpl: 5, lpb: 15, bpm: true))
+    let r6 = try #require(Timing.rowDuration(song: sechs))
+    let r5 = try #require(Timing.rowDuration(song: fuenf))
+    #expect(abs(r6 - 60.0 / (66.0 * 15.0)) < 0.0005)   // bei TPL 6 deckungsgleich
+    #expect(abs(r5 - 0.050495) < 0.0005)               // bei TPL 5 um 20 % kuerzer
+}
+
+@Test func spdTimingFollowsTheCIATimer() throws {
+    // SPD-Modus, Tempo 33 (Vorgabe eines neuen Songs): Periode 470000/33 =
+    // 14242, bei 709379 Hz also 49,81 Ticks je Sekunde — die klassischen 50 Hz.
+    let song = try MEDLoader.load(bytes: syntheticSong(tempo: 33, tpl: 6, lpb: 8, bpm: false))
+    let tick = try #require(Timing.tickDuration(song: song))
     #expect(abs(tick - 0.020077) < 1e-5)
     // Am Original gemessen: hold 1 gegen hold 32 ergab 0,620 s Unterschied.
     #expect(abs(31 * tick - 0.620) < 0.005)
+}
+
+/// Kleinstes gueltiges MMD1 mit den gewuenschten Tempowerten — fuer Tests, die
+/// keine echte Songdatei brauchen.
+private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> [UInt8] {
+    var b = [UInt8](repeating: 0, count: 52 + 788)
+    b[0...3] = ArraySlice("MMD1".utf8)
+    func put32(_ v: Int, _ o: Int) {
+        b[o] = UInt8(v >> 24 & 0xFF); b[o+1] = UInt8(v >> 16 & 0xFF)
+        b[o+2] = UInt8(v >> 8 & 0xFF); b[o+3] = UInt8(v & 0xFF)
+    }
+    put32(b.count, 4)          // modlen
+    put32(52, 8)               // song-Zeiger
+    let s = 52
+    b[s + 504] = 0; b[s + 505] = 0                       // numblocks
+    b[s + 764] = UInt8(tempo >> 8); b[s + 765] = UInt8(tempo & 0xFF)
+    b[s + 768] = (lpb - 1) | (bpm ? 0x20 : 0)            // flags2
+    b[s + 769] = tpl                                     // tempo2
+    b[s + 787] = 0                                       // numsamples
+    return b
 }
 
 @Test func svolToMIDI() {

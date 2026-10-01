@@ -36,12 +36,33 @@ public struct Block: Sendable {
     /// Zusätzliche Befehlsseiten (`BlockCmdPageTable`), je 2 Bytes pro Zelle,
     /// gleiche Anordnung. Leer, wenn der Block nur eine Seite hat.
     public let zusatzSeiten: [[Befehl]]
+    /// Zweites Parameterbyte je Zelle aus der **Befehlserweiterung**.
+    ///
+    /// Der Zeiger darauf steht in `BlockInfo` auf dem ersten der fünf Felder,
+    /// die Kinnunens Spezifikation als `reserved[5]` führt — undokumentiert.
+    /// Gefunden über OpenMPT `Load_med.cpp` (`MMDBlockInfo.cmdExtTableOffset`).
+    /// Die Tabelle enthält ein Byte je Zelle und Befehlsseite.
+    /// Leer, wenn der Block keine Erweiterung hat.
+    public let zusatzParameter: [[UInt8]]
+
+    /// Trägt der Block eine Befehlserweiterung, sind Lautstärkewerte 7-bittig
+    /// (0–127) statt 0–64. Quelle: OpenMPT setzt dort `vol7bit`.
+    public var siebenBitLautstärke: Bool { !zusatzParameter.isEmpty }
 
     public init(nummer: Int, name: String, spuren: Int, zeilen: Int,
-                zellen: [Zelle], zusatzSeiten: [[Befehl]]) {
+                zellen: [Zelle], zusatzSeiten: [[Befehl]],
+                zusatzParameter: [[UInt8]] = []) {
         self.nummer = nummer; self.name = name
         self.spuren = spuren; self.zeilen = zeilen
         self.zellen = zellen; self.zusatzSeiten = zusatzSeiten
+        self.zusatzParameter = zusatzParameter
+    }
+
+    /// Zweites Parameterbyte einer Zelle, falls vorhanden.
+    public func zusatzParameter(zeile: Int, spur: Int, seite: Int = 0) -> UInt8? {
+        guard seite < zusatzParameter.count else { return nil }
+        let i = zeile * spuren + spur
+        return i < zusatzParameter[seite].count ? zusatzParameter[seite][i] : nil
     }
 
     public func zelle(zeile: Int, spur: Int) -> Zelle {
@@ -139,6 +160,12 @@ public struct Song: Sendable {
     public let zeilenProBeat: Int
     public let songTransponierung: Int8
     public let mixingModus: Bool
+    /// Lesart der `0C`-Werte für einen Block.
+    public func lautstärkelesart(block: Block) -> Befehlskatalog.Lautstärkelesart {
+        if block.siebenBitLautstärke { return .siebenBit }
+        return lautstärkeHex ? .hexadezimal : .dezimal
+    }
+
     /// `FLAG_VOLHEX` — ob Lautstärkewerte hexadezimal zu lesen sind.
     /// Wird beim Abspielen ausgewertet, nicht nur bei der Anzeige: dieselben
     /// Patterndaten ergeben je nach Modus verschiedene MIDI-Velocities.

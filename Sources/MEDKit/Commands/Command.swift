@@ -129,8 +129,12 @@ public enum Befehlskatalog {
         case .controllerNummer:
             return "Controller-Nummer auf CC\(b.daten) setzen"
         case .velocity:
-            return "Velocity \(velocity(ausBefehlsdaten: b.daten, hexModus: true)) (hex) "
-                 + "bzw. \(velocity(ausBefehlsdaten: b.daten, hexModus: false)) (dezimal)"
+            if let g = grundlautstärke(ausBefehlsdaten: b.daten) {
+                return "Grundlautstärke des Instruments auf \(g) setzen"
+            }
+            return "Velocity \(velocity(ausBefehlsdaten: b.daten, lesart: .siebenBit)) "
+                 + "(7 Bit) · \(velocity(ausBefehlsdaten: b.daten, lesart: .hexadezimal)) (hex) "
+                 + "· \(velocity(ausBefehlsdaten: b.daten, lesart: .dezimal)) (dezimal)"
         case .lautstärkeController:
             return "Lautstärke CC7 = \(b.daten)"
         case .pan:
@@ -180,40 +184,64 @@ public enum Befehlskatalog {
         }
     }
 
+    /// Wie das Datenbyte von Befehl `0C` zu lesen ist.
+    ///
+    /// OctaMED kennt drei Fälle. Welcher gilt, hängt von `FLAG_VOLHEX` und
+    /// davon ab, ob der Block eine Befehlserweiterung trägt.
+    public enum Lautstärkelesart: Sendable, Equatable {
+        /// Block hat eine Befehlserweiterung (`cmdExtTableOffset`): das Byte
+        /// ist bereits der 7-Bit-Wert 0–127, also direkt MIDI-Velocity.
+        case siebenBit
+        /// `FLAG_VOLHEX` gesetzt: das Byte ist ein Hexwert 0–64.
+        case hexadezimal
+        /// `FLAG_VOLHEX` nicht gesetzt: die beiden Halbbytes sind
+        /// Dezimalziffern, `0x40` bedeutet also 40.
+        case dezimal
+    }
+
     /// Velocity aus dem Datenbyte des Befehls `0C`.
     ///
-    /// **Am Original gemessen** (OctaMED im Amiga-Emulator, MIDI-Ausgang mit
-    /// MIDI Monitor mitgelesen, 2026-10-01). Entscheidend: *dieselben*
-    /// Patterndaten, nur der Anzeigemodus umgeschaltet:
+    /// **Am Original gemessen** (Amiga-Emulator, MIDI-Ausgang mit MIDI Monitor,
+    /// 2026-10-01): *dieselben* Patterndaten, nur der Anzeigemodus
+    /// umgeschaltet — Byte `0x40` ergibt im Hex-Modus 127, im Dezimalmodus 79.
+    /// Der Modus wird also beim Abspielen ausgewertet, nicht nur bei der
+    /// Anzeige.
     ///
-    /// | gespeichertes Byte | Modus | gesendete Velocity |
-    /// |---|---|---|
-    /// | `0x40` | hex | 127 |
-    /// | `0x40` | dezimal | **79** |
+    /// Umrechnung in beiden skalierten Fällen:
     ///
-    /// Der Modus wird also beim Abspielen ausgewertet. Das Byte hält die
-    /// **Ziffern**, nicht den Zahlenwert: `0x40` bedeutet im Hex-Modus 64, im
-    /// Dezimalmodus 40. Beide Fälle ergeben dann dieselbe Umrechnung:
+    ///     velocity = min(⌊wert × 127 / 64⌋, 127)
     ///
-    ///     64 × 127 / 64 = 127
-    ///     40 × 127 / 64 = 79,375 → 79
+    /// Ganzzahlig abgeschnitten ist das identisch mit „verdoppeln, von null
+    /// gezählt" (`2v − 1` für `v = 1…64`), weil `v × 127/64 = 2v − v/64`.
+    /// Beide Beschreibungen meinen dieselbe Funktion. Abschneiden, nicht
+    /// runden: mit Rundung käme bei `v = 32` fälschlich 64 statt 63 heraus.
     ///
-    /// Der Modus steht als `FLAG_VOLHEX` (0x10) in `MMD0song.flags`.
+    /// Im Fall `.siebenBit` wird **nicht** skaliert — der Wert ist bereits die
+    /// Velocity. Quelle: OpenMPT `Load_med.cpp`, Befehl 0x0C, dritte
+    /// Verzweigung (`(param & 0x7F + 1) / 2` rechnet dort auf die interne
+    /// 0–64-Skala herunter).
     ///
-    /// **Abschneiden, nicht runden.** Ganzzahlig abgeschnitten gilt
-    ///
-    ///     ⌊v × 127 / 64⌋ = 2v − 1     für v = 1 … 64
-    ///
-    /// weil `v × 127/64 = 2v − v/64` und `v/64` dort zwischen 0 und 1 liegt.
-    /// Die Verdopplung mit Nullbasis und diese Formel sind also **dieselbe
-    /// Funktion** — kein Messwert kann sie trennen. (Hinweis des Autors.)
-    /// Mit Rundung käme bei `v = 32` fälschlich 64 statt 63 heraus.
-    ///
-    /// Tutkas `× 128/96` ergäbe bei 40 den Wert 53 und bleibt damit widerlegt.
+    /// Werte ab `0x80` setzen laut Handbuch die Grundlautstärke des
+    /// Instruments (`$80`–`$C0` für 0–64) statt die Notenlautstärke. In den
+    /// sieben Testdateien kommt das in über 11 000 `0C`-Befehlen **kein
+    /// einziges Mal** vor; die Diagnose meldet es, falls doch.
     public static func velocity(ausBefehlsdaten byte: UInt8,
-                                hexModus: Bool) -> UInt8 {
-        let wert = hexModus ? Int(byte) : Int(byte >> 4) * 10 + Int(byte & 0x0F)
-        return UInt8(min(wert * 127 / 64, 127))
+                                lesart: Lautstärkelesart) -> UInt8 {
+        if byte >= 0x80 { return 0 }   // setzt die Grundlautstärke, keine Note
+        switch lesart {
+        case .siebenBit:
+            return byte & 0x7F
+        case .hexadezimal:
+            return UInt8(min(min(Int(byte), 64) * 127 / 64, 127))
+        case .dezimal:
+            let wert = Int(byte >> 4) * 10 + Int(byte & 0x0F)
+            return UInt8(min(wert * 127 / 64, 127))
+        }
+    }
+
+    /// Grundlautstärke, die ein `0C`-Wert ab `0x80` setzt (0–64), sonst `nil`.
+    public static func grundlautstärke(ausBefehlsdaten byte: UInt8) -> UInt8? {
+        byte >= 0x80 ? min(byte - 0x80, 64) : nil
     }
 
     /// Instrument-Grundlautstärke `svol` (0–64) in den MIDI-Bereich.

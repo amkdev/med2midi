@@ -21,14 +21,12 @@ public struct Warnung: Sendable, CustomStringConvertible {
         case unbekannterBefehl(nummer: UInt8, daten: UInt8)
         case befehlOhneWirkungBeiMIDI(nummer: UInt8)
         case kanalKollision(kanal: UInt8, instrumente: [Int])
-        case velocityÜberBereich(wert: UInt8)
         case modlenStimmtNicht(modlen: UInt32, dateigröße: Int)
         case instrExtUngewöhnlich(größe: UInt16)
         case dumpUnvollständig(index: Int)
         case cmd3xFehlt(befehl: UInt8)
         case notenOhneMIDIKanal(instrument: Int, name: String, noten: Int)
         case befehlMitAuffälligemWertebereich(nummer: UInt8, werte: [UInt8])
-        case volhexUnplausibel(laut: String, sättigungLaut: Int, sättigungAndere: Int)
         case sonstiges(String)
     }
 
@@ -45,8 +43,6 @@ public struct Warnung: Sendable, CustomStringConvertible {
             text = "Befehl \(String(format: "%02X", n)) hat bei MIDI-Instrumenten keine Wirkung"
         case .kanalKollision(let k, let i):
             text = "MIDI-Kanal \(k): mehrere klingende Instrumente \(i)"
-        case .velocityÜberBereich(let w):
-            text = "Velocity-Werte über \(w): werden beim Skalieren alle zu 127 (Dynamik geht verloren)"
         case .modlenStimmtNicht(let m, let d):
             text = "modlen \(m) weicht von der Dateigröße \(d) ab"
         case .instrExtUngewöhnlich(let g):
@@ -62,10 +58,6 @@ public struct Warnung: Sendable, CustomStringConvertible {
             text = "Befehl \(String(format: "%02X", nummer)) benutzt nur die Werte "
                  + werte.map(String.init).joined(separator: ", ")
                  + " — das passt nicht zu seiner MIDI-Bedeutung"
-        case .volhexUnplausibel(let laut, let a, let b):
-            text = "Lautstärke-Flag sagt „\(laut)“, aber dann sättigen \(a) % aller "
-                 + "Velocities bei 127 (in der anderen Lesart nur \(b) %). "
-                 + "Vermutlich wurde der Anzeigemodus umgeschaltet, ohne die Werte zu konvertieren."
         case .sonstiges(let s):
             text = s
         }

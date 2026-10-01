@@ -77,25 +77,55 @@ enum Testmaterial {
 }
 
 @Test func velocityNachMessungAmOriginal() {
-    // Am Amiga gemessen: Byte 0x40 ergibt im Hex-Modus 127, im Dezimalmodus 79.
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, hexModus: true) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, hexModus: false) == 79)
-    // Werte über 64 saettigen — vom Autor bestaetigt: "41-7F = vel 127".
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x41, hexModus: true) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x7F, hexModus: true) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0, hexModus: true) == 0)
+    // Am Amiga gemessen: dieselben Patterndaten, nur der Anzeigemodus
+    // umgeschaltet — Byte 0x40 ergibt im Hex-Modus 127, im Dezimalmodus 79.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, lesart: .hexadezimal) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, lesart: .dezimal) == 79)
+    // "41-7F = vel 127", vom Autor bestaetigt.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x41, lesart: .hexadezimal) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x7F, lesart: .hexadezimal) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0, lesart: .hexadezimal) == 0)
 }
 
 @Test func velocityIstVerdopplungMitNullbasis() {
     // Abgeschnitten gilt floor(v * 127/64) == 2v - 1 fuer v = 1...64.
-    // Beide Beschreibungen meinen dieselbe Funktion; mit Rundung waere es
-    // eine andere, und bei v = 32 kaeme faelschlich 64 statt 63 heraus.
     for v in 1...64 {
-        let erwartet = UInt8(2 * v - 1)
-        #expect(Befehlskatalog.velocity(ausBefehlsdaten: UInt8(v), hexModus: true) == erwartet,
-                "v = \(v)")
+        #expect(Befehlskatalog.velocity(ausBefehlsdaten: UInt8(v), lesart: .hexadezimal)
+                == UInt8(2 * v - 1), "v = \(v)")
     }
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 32, hexModus: true) == 63)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 32, lesart: .hexadezimal) == 63)
+}
+
+@Test func siebenBitLautstärkeWirdNichtSkaliert() {
+    // Mit Befehlserweiterung ist der Wert bereits die MIDI-Velocity.
+    // Quelle: OpenMPT Load_med.cpp, dritte Verzweigung bei 0x0C.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x40, lesart: .siebenBit) == 64)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x70, lesart: .siebenBit) == 112)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x7F, lesart: .siebenBit) == 127)
+}
+
+@Test func werteAb80SetzenDieGrundlautstärke() {
+    // Handbuch: "Range: 0-64, or $80-$C0 for default instrument volume."
+    #expect(Befehlskatalog.grundlautstärke(ausBefehlsdaten: 0x90) == 16)
+    #expect(Befehlskatalog.grundlautstärke(ausBefehlsdaten: 0x80) == 0)
+    #expect(Befehlskatalog.grundlautstärke(ausBefehlsdaten: 0x7F) == nil)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0x90, lesart: .hexadezimal) == 0)
+}
+
+@Test func befehlserweiterungNurInMMD3Dateien() throws {
+    // Gemessen: alle drei MMD3-Dateien tragen die Befehlserweiterung in
+    // nahezu jedem Block, keine der vier MMD1-Dateien.
+    for url in Testmaterial.alle {
+        let song = try MEDLoader.lade(datei: url)
+        let mitErweiterung = song.blöcke.filter(\.siebenBitLautstärke).count
+        if song.version == .mmd3 {
+            #expect(mitErweiterung > 0, "\(url.lastPathComponent): MMD3 ohne Erweiterung")
+            #expect(song.lautstärkelesart(block: song.blöcke.first { $0.siebenBitLautstärke }!)
+                    == .siebenBit)
+        } else {
+            #expect(mitErweiterung == 0, "\(url.lastPathComponent): MMD1 mit Erweiterung")
+        }
+    }
 }
 
 @Test func svolNachMIDI() {

@@ -66,6 +66,11 @@ enum Layout {
     /// `struct BlockInfo` — 36 Bytes, hinter `MMD1Block.info`.
     enum BlockInfo {
         static let hlmask = 0, blockname = 4, blocknamelen = 8, pagetable = 12
+        /// Undokumentiert: erster der fünf `reserved`-Einträge der
+        /// Spezifikation. Zeigt auf die Befehlserweiterung (ein zweites
+        /// Parameterbyte je Zelle). Gefunden über OpenMPT
+        /// `Load_med.cpp`, `MMDBlockInfo.cmdExtTableOffset`.
+        static let cmdExtTable = 16
         static let größe = 36
     }
 

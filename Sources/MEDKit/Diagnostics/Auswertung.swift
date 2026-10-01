@@ -4,7 +4,7 @@ extension MEDLoader {
     /// Befehlsstatistik, Warnungen und Hinweise über alle Blöcke.
     static func werteAus(blöcke: [Block], instrumente: [Instrument],
                          cmd3x: [(typ: UInt8, nummer: UInt16)],
-                         lautstärkeHex: Bool,
+                         lautstärkeHex: Bool, siebenBit: Bool,
                          in diagnose: inout Diagnose) {
         var statistik: [UInt8: Int] = [:]
         var fundstellen: [UInt8: [Fundstelle]] = [:]
@@ -70,52 +70,31 @@ extension MEDLoader {
                 art: .cmd3xFehlt(befehl: nummer),
                 fundstellen: fundstellen[nummer] ?? [], anzahl: statistik[nummer] ?? 0))
         }
-        // Sättigt die Lesart laut Flag auffällig viel stärker als die andere,
-        // wurde vermutlich der Anzeigemodus umgeschaltet, ohne die Werte zu
-        // konvertieren. OctaMED wertet FLAG_VOLHEX beim Abspielen aus, nicht
-        // nur bei der Anzeige — am Original gemessen.
+        // Die Lesart der 0C-Werte hängt vom Block ab: trägt er eine
+        // Befehlserweiterung, sind die Werte 7-bittig (0–127), sonst gilt
+        // FLAG_VOLHEX. Dass dieselben Daten je nach Modus andere Velocities
+        // ergeben, ist am Original gemessen.
         let gesamt = velocityWerte.values.reduce(0, +)
-        if gesamt > 50 {
-            func sättigung(hex: Bool) -> Int {
-                let satt = velocityWerte
-                    .filter { Befehlskatalog.velocity(ausBefehlsdaten: $0.key, hexModus: hex) >= 127 }
-                    .values.reduce(0, +)
-                return satt * 100 / gesamt
-            }
-            let laut = sättigung(hex: lautstärkeHex)
-            let andere = sättigung(hex: !lautstärkeHex)
-            if laut >= 50, laut - andere >= 30 {
-                diagnose.warnungen.append(Warnung(
-                    art: .volhexUnplausibel(laut: lautstärkeHex ? "hexadezimal" : "dezimal",
-                                            sättigungLaut: laut, sättigungAndere: andere),
-                    fundstellen: fundstellen[0x0C] ?? [], anzahl: gesamt))
-            } else if laut > 0 {
+        if gesamt > 50, !siebenBit {
+            let satt = velocityWerte
+                .filter { Befehlskatalog.velocity(ausBefehlsdaten: $0.key,
+                                                  lesart: lautstärkeHex ? .hexadezimal : .dezimal) >= 127 }
+                .values.reduce(0, +)
+            let quote = satt * 100 / gesamt
+            if quote > 0 {
                 diagnose.hinweise.append(Hinweis(
-                    text: "\(laut) % der Velocities sättigen bei 127 "
-                        + "(Lautstärke-Flag: \(lautstärkeHex ? "hexadezimal" : "dezimal"))"))
+                    text: "\(quote) % der Velocities erreichen 127 "
+                        + "(Lesart: \(lautstärkeHex ? "hexadezimal" : "dezimal"))"))
             }
         }
 
-        // Noten auf Instrumenten ohne MIDI-Kanal gehen beim Export verloren.
-        for ins in instrumente where !ins.istMIDI {
-            if let noten = notenProInstrument[UInt8(ins.nummer)], noten > 0 {
-                diagnose.warnungen.append(Warnung(
-                    art: .notenOhneMIDIKanal(instrument: ins.nummer, name: ins.name, noten: noten),
-                    fundstellen: [], anzahl: noten))
-            }
-        }
-
-        // Ein Befehl, der nur eine Handvoll kleiner Werte benutzt, passt oft
-        // nicht zu seiner MIDI-Bedeutung — etwa 0A (polyphoner Aftertouch),
-        // das in einer Datei nur die Werte 0, 1 und 15 trägt. Das deutet auf
-        // die Sample-Bedeutung, die der Autor im Kopf hatte.
-        for nummer: UInt8 in [0x0A, 0x0D] {
-            guard let werte = werteProBefehl[nummer], werte.count <= 4,
-                  let größter = werte.max(), größter <= 15,
-                  (statistik[nummer] ?? 0) > 50 else { continue }
-            diagnose.warnungen.append(Warnung(
-                art: .befehlMitAuffälligemWertebereich(nummer: nummer, werte: werte.sorted()),
-                fundstellen: fundstellen[nummer] ?? [], anzahl: statistik[nummer] ?? 0))
+        // 0C ab 0x80 setzt die Grundlautstärke des Instruments statt einer
+        // Notenlautstärke. In den Testdateien kommt das nicht vor.
+        let grund = velocityWerte.filter { $0.key >= 0x80 }
+        if !grund.isEmpty {
+            diagnose.hinweise.append(Hinweis(
+                text: "Befehl 0C mit Werten ab 0x80 (\(grund.values.reduce(0, +))×): "
+                    + "setzt die Grundlautstärke des Instruments, nicht die Note"))
         }
 
         // Kanalbelegung: Warnung nur bei zwei KLINGENDEN Instrumenten.

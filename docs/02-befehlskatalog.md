@@ -176,37 +176,87 @@ Verdopplung sei widerlegt.)
 
 Widerlegt bleibt Tutkas `× 128/96`: das ergäbe bei 40 den Wert 53.
 
-### Wenn das Flag nicht zu den Daten passt
+### Drei Lesarten, nicht zwei
 
-Fünf der sieben Dateien passen zum Flag. Zwei nicht:
+Die Lesart hängt nicht nur am Flag. OpenMPT `Load_med.cpp`, Befehl `0x0C`:
 
-| Datei | Flag | typische `0C`-Bytes | sättigt laut Flag | andere Lesart |
-|---|---|---|---|---|
-| `N_WOISTDAS_MU80.med` | hex | `27 13 1F 0F 07 73` | 18 % | — |
-| `N_ich_will_neues.mmd1` | hex | `10 20 30 40 08 60` | 22 % | — |
-| `O_Wie_Eine_Marionette.MMD` | dezimal | `40 50 30 60 20 6F` | 5 % | — |
-| `sehnsuchts_blues.MMD1.pp` | dezimal | `30 40 50 60 10 20` | 0 % | — |
-| `unsere_hände_spielen.MMD` | dezimal | `20 30 10 40 50 60` | 0 % | — |
-| **`final_manchmaltriffteinlächeln2001.med`** | **hex** | `50 60 40 70 30 20` | **98 %** | 5 % |
-| **`final_soverloren.med`** | **hex** | `50 40 30 60 70 68` | **91 %** | 2 % |
+```c
+if(!ctx.volHex && param < 0x99)
+    SetVolume((param >> 4) * 10 + (param & 0x0F));          // Dezimalziffern
+else if(ctx.volHex && !ctx.vol7bit)
+    SetVolume(std::min(param & 0x7F, 64));                   // Hexwert 0–64
+else if(ctx.volHex)
+    SetVolume(((param & 0x7F) + 1) / 2);                     // 7 Bit, hier
+                                                             // auf 0–64 herunter
+```
 
-Bei den beiden letzten ergibt die Lesart laut Flag ein Stück ohne jede Dynamik.
-Als Dezimalziffern gelesen stehen dort die Leitern 40/50/60/70 — genau das, was
-man im Dezimalmodus tippt. `N_WOISTDAS_MU80.med` zeigt umgekehrt Bytes mit
-Halbbyte `F`, die als Dezimalziffern gar nicht vorkommen können; dort ist der
-Hex-Modus richtig.
+Der dritte Fall gilt, wenn `vol7bit` gesetzt ist — dann ist der gespeicherte
+Wert **bereits 0–127** und wird nicht skaliert. Für MIDI ist er direkt die
+Velocity.
 
-Wahrscheinliche Ursache: Der Anzeigemodus wurde umgeschaltet, ohne die Werte
-mit der eingebauten Konvertierfunktion umzurechnen. Beide betroffenen Dateien
-stammen von 2002 und wurden unter Windows bearbeitet.
+### Die undokumentierte Befehlserweiterung
 
-Die Diagnose meldet das: Sättigt die Lesart laut Flag mindestens 50 % der
-Velocities und mindestens 30 Prozentpunkte mehr als die andere, erscheint eine
-Warnung. Sonst steht die Sättigungsquote als Hinweis.
+`vol7bit` setzt OpenMPT, wenn der Block eine **Befehlserweiterung** trägt. Deren
+Zeiger steht in `BlockInfo` auf dem ersten der fünf Felder, die Kinnunens
+Spezifikation als `reserved[5]` führt:
 
-**Zu entscheiden bleibt**, welcher Lesart der Export für diese beiden Dateien
-folgt. Am schnellsten per Gehör: die Datei im Emulator abspielen und hören, ob
-oberhalb von 64 noch Dynamik da ist.
+```c
+struct MMDBlockInfo {
+    uint32be highlightMaskOffset;
+    uint32be nameOffset;
+    uint32be nameLength;
+    uint32be pageTableOffset;
+    uint32be cmdExtTableOffset;   // undokumentiert, Offset 16
+    uint32be reserved[4];
+};
+```
+
+Die Tabelle enthält ein **zweites Parameterbyte je Zelle und Befehlsseite**.
+
+**Gemessen an den sieben Dateien:**
+
+| Datei | Kennung | Blöcke mit `BlockInfo` | davon mit Erweiterung |
+|---|---|---|---|
+| `N_WOISTDAS_MU80.med` | MMD3 | 25 | **24** |
+| `final_manchmaltriffteinlächeln2001.med` | MMD3 | 21 | **21** |
+| `final_soverloren.med` | MMD3 | 28 | **28** |
+| alle vier MMD1-Dateien | MMD1 | — | **0** |
+
+Damit klärt sich der scheinbare Widerspruch: Die beiden Dateien, deren
+Lautstärkewerte als Hex gelesen zu 98 % bzw. 91 % sättigten, tragen die
+Erweiterung — ihre Werte sind 7-bittig und ergeben eine saubere Dynamikleiter
+(64, 80, 96, 112), keine Sättigung.
+
+Inhaltlich spiegelt das Erweiterungsbyte bei `0C` meist den normalen
+Datenwert. OpenMPT wertet es nur für die Mix-Modus-Befehle `0x20` und `0x29`
+aus — für MIDI belanglos. Entscheidend ist sein **Vorhandensein**.
+
+### Ergebnis je Datei
+
+| Datei | Lesart | Velocity-Bereich | verschiedene Werte |
+|---|---|---|---|
+| `N_WOISTDAS_MU80.med` | 7 Bit | 7–127 | 58 |
+| `final_manchmaltriffteinlächeln2001.med` | 7 Bit | 0–127 | 42 |
+| `final_soverloren.med` | 7 Bit | 48–112 | 6 |
+| `N_ich_will_neues.mmd1` | hexadezimal | 0–127 | 29 |
+| `O_Wie_Eine_Marionette.MMD` | dezimal | 0–127 | 52 |
+| `sehnsuchts_blues.MMD1.pp` | dezimal | 3–127 | 50 |
+| `unsere_hände_spielen.MMD` | dezimal | 15–127 | 40 |
+
+Keine Datei sättigt mehr auffällig. Die frühere Warnung über ein „unplausibles
+Flag" ist damit gegenstandslos und entfernt.
+
+### Werte ab `0x80`: Grundlautstärke statt Note
+
+Handbuch: „Range: 0-64, or **$80-$C0 for default instrument volume**."
+Vom Autor am Original bestätigt: `0C90` setzt die Instrumentlautstärke auf 16
+(`0x90 − 0x80 = 0x10`), sichtbar im Fenster *Instrumenten Parameter*.
+
+In den sieben Dateien kommt das in über **11 000** `0C`-Befehlen **kein
+einziges Mal** vor. `Befehlskatalog.grundlautstärke(ausBefehlsdaten:)` deckt den
+Fall ab, die Diagnose meldet ihn, falls er auftritt.
+
+OpenMPT lässt ihn aus („which we don't support"), Tutka ebenfalls.
 
 ### Nicht zu verwechseln: `svol`
 

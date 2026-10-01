@@ -184,7 +184,8 @@ public enum MEDLoader {
         var diagnose = Diagnose(warnungen: warnungen, hinweise: hinweise,
                                 befehlsStatistik: [:], befehlsFundstellen: [:])
         werteAus(blöcke: blöcke, instrumente: instrumente, cmd3x: cmd3x,
-                 lautstärkeHex: lautstärkeHex, in: &diagnose)
+                 lautstärkeHex: lautstärkeHex,
+                 siebenBit: blöcke.contains { $0.siebenBitLautstärke }, in: &diagnose)
         hinweise = diagnose.hinweise
 
         return Song(
@@ -207,6 +208,7 @@ public enum MEDLoader {
         let spuren: Int, zeilen: Int
         var name = ""
         var zusatzSeiten: [[Befehl]] = []
+        var zusatzParameter: [[UInt8]] = []
 
         if version == .mmd0 {
             spuren = Int(try r.u8(bp))
@@ -218,6 +220,18 @@ public enum MEDLoader {
                 if let bn = try r.zeiger(info + Layout.BlockInfo.blockname, feld: "blockname") {
                     let länge = Int(try r.u32(info + Layout.BlockInfo.blocknamelen))
                     name = r.text(bn, maxLänge: max(1, min(länge, 256)))
+                }
+                // Befehlserweiterung: ein Byte je Zelle und Seite.
+                if let ce = try r.zeiger(info + Layout.BlockInfo.cmdExtTable,
+                                         feld: "cmdExtTable"),
+                   let tabelle = try r.zeiger(ce, feld: "cmdExtTable[0]") {
+                    let seitenGesamt = 1 + anzahlSeiten(r, info)
+                    let proSeite = spuren * zeilen
+                    for s in 0..<seitenGesamt {
+                        let start = tabelle + s * proSeite
+                        guard r.passt(start, proSeite) else { break }
+                        zusatzParameter.append(Array(r.bytes[start..<(start + proSeite)]))
+                    }
                 }
                 if let pt = try r.zeiger(info + Layout.BlockInfo.pagetable, feld: "pagetable") {
                     let seiten = Int(try r.u16(pt))
@@ -261,7 +275,15 @@ public enum MEDLoader {
             }
         }
         return Block(nummer: nummer, name: name, spuren: spuren, zeilen: zeilen,
-                     zellen: zellen, zusatzSeiten: zusatzSeiten)
+                     zellen: zellen, zusatzSeiten: zusatzSeiten,
+                     zusatzParameter: zusatzParameter)
+    }
+
+    /// Zahl der zusätzlichen Befehlsseiten laut `BlockCmdPageTable`.
+    private static func anzahlSeiten(_ r: ByteReader, _ info: Int) -> Int {
+        guard let pt = try? r.zeiger(info + Layout.BlockInfo.pagetable, feld: "pagetable"),
+              let n = try? r.u16(pt) else { return 0 }
+        return Int(n)
     }
 
     // MARK: - Dumps und Cmd3x

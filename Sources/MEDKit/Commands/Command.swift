@@ -179,36 +179,32 @@ public enum Befehlskatalog {
         }
     }
 
-    /// Wie das Datenbyte von Befehl `0C` in MIDI-Velocity umgerechnet wird.
-    public enum VelocityAbbildung: Sendable {
-        /// 0–64 → 0–127 (verdoppeln, bei 127 begrenzen). Handbuch und Autor.
-        case skalieren
-        /// Wert unverändert, bei 127 begrenzt.
-        case durchreichen
-    }
-
     /// Velocity aus dem Datenbyte des Befehls `0C`.
     ///
-    /// Handbuch, Befehl 0C (MIDI): "The normal Amiga sample volume range of
-    /// 0 - 64 is converted to the MIDI range of 0 - 127." Der Autor bestätigt
-    /// das aus der Erinnerung: 64 ist die Maximallautstärke, nicht die halbe.
+    /// **Am Original gemessen** (OctaMED im Amiga-Emulator, MIDI-Ausgang mit
+    /// MIDI Monitor mitgelesen, 2026-10-01):
     ///
-    /// **Widerspruch zu den Daten, festgehalten:** In allen sieben Testdateien
-    /// kommen Werte bis 127 vor, und die häufigsten liegen auf dem 16er-Raster
-    /// 16/32/48/64/80/96/112. Bei `final_manchmaltriffteinlächeln2001.med` und
-    /// `final_soverloren.med` liegen drei Viertel der Werte über 64 und werden
-    /// beim Skalieren alle zu 127 — beide Stücke wären oberhalb von 64
-    /// dynamisch flach.
+    /// | gespeicherter Wert | gesendete Velocity |
+    /// |---|---|
+    /// | 40 | 79 |
+    /// | 64 (`$40`) | 127 |
+    /// | 65–127 (`$41`–`$7F`) | 127 |
     ///
-    /// Auflösbar ist das nur am Original: eine Note mit `0C40` setzen,
-    /// MIDI-Ausgang mitschneiden, Velocity ablesen. 127 bestätigt die
-    /// Skalierung, 64 das Durchreichen. Bis dahin gilt die Angabe des Autors.
-    public static func velocity(ausBefehlsdaten wert: UInt8,
-                                abbildung: VelocityAbbildung = .skalieren) -> UInt8 {
-        switch abbildung {
-        case .skalieren:    return UInt8(min(Int(wert) * 2, 127))
-        case .durchreichen: return min(wert, 127)
-        }
+    /// Das ist `wert × 127 / 64`, bei 127 begrenzt — **nicht** die Verdopplung
+    /// und nicht Tutkas `wert × 128 / 96`:
+    ///
+    ///     40 × 127 / 64 = 79,375 → 79     (×2 ergäbe 80, Tutka 53)
+    ///     64 × 127 / 64 = 127
+    ///     65 × 127 / 64 = 129   → 127
+    ///
+    /// **Folge, die hörbar ist:** Werte über 64 sättigen alle bei 127. In
+    /// `final_manchmaltriffteinlächeln2001.med` betrifft das 76 % aller
+    /// Velocities, in `final_soverloren.med` 75 % — letztere Datei behält nur
+    /// noch zwei verschiedene Velocities. Das ist kein Fehler des Exports,
+    /// sondern die Eigenschaft des Originals: OctaMED hat diese Werte damals
+    /// ebenso gesättigt.
+    public static func velocity(ausBefehlsdaten wert: UInt8) -> UInt8 {
+        UInt8(min((Int(wert) * 127 + 32) / 64, 127))
     }
 
     /// Instrument-Grundlautstärke `svol` (0–64) in den MIDI-Bereich.

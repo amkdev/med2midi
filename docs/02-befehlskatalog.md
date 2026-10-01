@@ -133,80 +133,77 @@ Tutka hat CC7 also um genau eine Stelle zu tief eingeordnet.
 `1A`/`1B` Lautstärke einmalig auf/ab · `1E` Zeile wiederholen ·
 `20`–`2F` Mix-Modus (für dieses Projekt ohne Belang)
 
-## Befehl `0C` (Velocity): Skalierung, mit dokumentiertem Widerspruch
+## Befehl `0C` (Velocity) — am Original gemessen
 
-**Umsetzung: 0–64 → 0–127, also verdoppeln und bei 127 begrenzen.**
-Quellen dafür: das Handbuch („The normal Amiga sample volume range of 0 - 64 is
-converted to the MIDI range of 0 - 127"), Tutka (mit anderem Faktor) und der
-Autor selbst: 64 ist die Maximallautstärke der MIDI-Instrumente, nicht die
-halbe.
+**Gemessen am 2026-10-01**: OctaMED im Amiga-Emulator, MIDI-Ausgang mit
+MIDI Monitor mitgelesen.
 
-**Der Widerspruch dazu, festgehalten:** In allen sieben Dateien kommen Werte bis
-127 vor, und die häufigsten liegen auf dem 16er-Raster 16/32/48/64/80/96/112 —
-acht Stufen über 0–127.
+| gespeicherter Wert | gesendete Velocity |
+|---|---|
+| 40 | **79** |
+| 64 (`$40`) | 127 |
+| 65–127 (`$41`–`$7F`) | 127 |
 
-| Datei | ≤ 64 | häufigste Werte |
+Daraus folgt eindeutig `wert × 127 / 64`, bei 127 begrenzt:
+
+```
+40 × 127 / 64 = 79,375 → 79
+64 × 127 / 64 = 127
+65 × 127 / 64 = 129   → 127
+```
+
+**Damit sind alle bisherigen Annahmen widerlegt**, auch meine beiden:
+
+| Formel | bei Wert 40 | Status |
 |---|---|---|
-| `N_WOISTDAS_MU80.med` | 81 % | 39, 19, 31, 15, 7, 115 |
-| `N_ich_will_neues.mmd1` | 92 % | 16, 32, 48, 64, 8, 96 |
-| `O_Wie_Eine_Marionette.MMD` | 59 % | 64, 80, 48, 96, 32, 111 |
-| `final_manchmaltriffteinlächeln2001.med` | **23 %** | 80, 96, 64, 112, 48, 32 |
-| `final_soverloren.med` | **24 %** | 80, 64, 48, 96, 112, 104 |
-| `sehnsuchts_blues.MMD1.pp` | 84 % | 48, 64, 80, 96, 16, 32 |
-| `unsere_hände_spielen.MMD` | 84 % | 32, 48, 16, 64, 80, 96 |
+| durchreichen | 40 | falsch |
+| `× 2` | 80 | falsch (um 1 daneben) |
+| Tutka `× 128/96` | 53 | falsch |
+| **`× 127/64`** | **79** | **gemessen** |
 
-Bei den beiden `final_`-Dateien liegen drei Viertel aller Velocities über 64;
-beim Skalieren werden sie alle zu 127. Diese Stücke wären oberhalb von 64
-dynamisch flach.
+Umsetzung: `Befehlskatalog.velocity(ausBefehlsdaten:)`, mit Rundung
+(`(wert × 127 + 32) / 64`).
 
-Beide Lesarten sind mit den Daten verträglich: Entweder OctaMED sättigt
-tatsächlich, und der Autor hat die Werte ohne hörbaren Unterschied gesetzt —
-oder es reicht durch. Die Schwäche des Daten-Arguments ist, dass es
-unterstellt, jeder gesetzte Wert sei bewusst gewählt worden; der Autor weist
-selbst darauf hin, dass die Songs von Hand programmiert wurden und Fehler
-enthalten.
+### Die Hex/Dez-Einstellung
 
-### Geprüft und verworfen: Zusammenhang mit der Formatversion
+Der Autor beobachtete, dass dieselbe Eingabe „C40" in den beiden Anzeigemodi
+verschiedene Velocities ergibt — 127 im Hex-Modus, 79 im Dezimalmodus.
 
-Vermutung des Autors: Womöglich hat die Windows-Version den Wertebereich
-geändert, vielleicht wegen der 16-Bit-Samples. Das würde sich an MMD1 gegen
-MMD3 zeigen. Tut es nicht:
+Das erklärt dieselbe Formel ohne Zusatzannahme: „40" bedeutet im Hex-Modus den
+Wert 64, im Dezimalmodus den Wert 40. Es werden also **zwei verschiedene Bytes
+gespeichert**, und beide werden gleich umgerechnet.
 
-| Kennung | Datei | > 64 | max | versch. Werte 65–127 |
-|---|---|---|---|---|
-| MMD1 | `O_Wie_Eine_Marionette.MMD` | 40 % | 111 | **25** |
-| MMD1 | `unsere_hände_spielen.MMD` | 15 % | 100 | **36** |
-| MMD1 | `sehnsuchts_blues.MMD1.pp` | 15 % | 112 | 18 |
-| MMD1 | `N_ich_will_neues.mmd1` | 7 % | 96 | 4 |
-| MMD3 | `N_WOISTDAS_MU80.med` | 18 % | 127 | 30 |
-| MMD3 | `final_manchmaltriffteinlächeln2001.med` | 76 % | 127 | 18 |
-| MMD3 | `final_soverloren.med` | 75 % | 112 | 4 |
+Offen bleibt die schärfere Frage: Ändert das Flag `FLAG_VOLHEX` (0x10 in
+`flags`) die Auswertung **desselben** gespeicherten Bytes? Entscheidbar durch:
+ein Pattern anlegen, nicht verändern, nur den Modus umschalten, erneut
+abspielen. Bleibt die Velocity gleich, ist das Flag für den Export belanglos.
 
-Die Amiga-geschriebenen MMD1-Dateien nutzen den oberen Bereich ebenso, eine
-davon mit 36 verschiedenen Werten über 64. Der Bereich ist keine Neuerung der
-Windows-Version.
+### Was das für die Songs bedeutet
 
-Die 16-Bit-Sample-Spur führt ebenfalls nicht weiter: Die Messung filtert auf
-MIDI-Instrumente, Sample-Lautstärken sind gar nicht enthalten.
+Werte über 64 sättigen bei 127 — vom Autor bestätigt („41–7F = vel 127").
 
-Was sich unterscheidet, ist der Arbeitsstil je Song: `N_WOISTDAS_MU80.med` hat
-93 % ungerade Werte (feiner, vermutlich gezeichneter Verlauf),
-`final_soverloren.med` insgesamt nur sechs verschiedene, alle gerade (von Hand
-gesetztes 16er-Raster).
+| Datei | Anteil > 64 | verschiedene Velocities danach |
+|---|---|---|
+| `final_manchmaltriffteinlächeln2001.med` | 76 % | 24 (von 42 Rohwerten) |
+| `final_soverloren.med` | 75 % | **2** (von 6 Rohwerten) |
+| `O_Wie_Eine_Marionette.MMD` | 40 % | 45 (von 70) |
+| `N_WOISTDAS_MU80.med` | 18 % | 28 (von 58) |
+| `sehnsuchts_blues.MMD1.pp` | 15 % | 46 (von 64) |
+| `unsere_hände_spielen.MMD` | 15 % | 22 (von 58) |
+| `N_ich_will_neues.mmd1` | 7 % | 29 (von 33) |
 
-**Entscheidbar am Original:** eine Note mit `0C40` auf ein MIDI-Instrument,
-MIDI-Ausgang mitschneiden, Velocity ablesen. 127 bestätigt die Skalierung,
-64 das Durchreichen.
+`final_soverloren.med` behält nur zwei verschiedene Velocities. Das ist **kein
+Fehler des Exports**, sondern die Eigenschaft des Originals: OctaMED hat diese
+Werte damals ebenso gesättigt. Hörbar war der Unterschied nie.
 
-Bis dahin gilt die Angabe des Autors. Die Alternative bleibt wählbar:
-`Befehlskatalog.velocity(ausBefehlsdaten:abbildung:)` mit `.durchreichen`.
-Die Diagnose meldet Werte über 64, weil dort Dynamik verloren geht.
+Die Diagnose meldet Werte über 64 weiterhin, damit das sichtbar bleibt.
 
-Davon zu trennen und unabhängig belegt: die Instrument-Grundlautstärke `svol`
-(0–64) wird ebenfalls verdoppelt und bei 127 gedeckelt — das zeigt das
-undokumentierte Feld der 24-Byte-`InstrExt` (47→94, 49→98, 48→96, 64→127,
-32→64, 50→100). **Dass genau diese Größe verdoppelt wird, stützt die
-Skalierung auch für `0C`.**
+### Nicht zu verwechseln: `svol`
+
+Die Instrument-Grundlautstärke `svol` (0–64) wird **verdoppelt**, nicht mit
+127/64 gerechnet. Das zeigt das undokumentierte Feld der 24-Byte-`InstrExt`:
+47→94, 49→98, 48→96, 64→127, 32→64, 50→100. Mit `× 127/64` ergäbe 47 den Wert
+93, gemessen ist 94. Zwei verschiedene Größen mit zwei verschiedenen Formeln.
 
 ## Sample-Instrumente kommen vor — anders als im Projekt-Prompt angenommen
 

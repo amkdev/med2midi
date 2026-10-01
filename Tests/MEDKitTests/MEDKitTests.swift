@@ -76,17 +76,16 @@ enum Testmaterial {
     #expect(TempoSonderfall(daten: 0x40) == .tempoSetzen(0x40))
 }
 
-@Test func velocityAbbildung() {
-    // Standard ist Skalierung: 0-64 -> 0-127, laut Handbuch und Autor.
+@Test func velocityNachMessungAmOriginal() {
+    // Am Amiga gemessen: 40 -> 79, 64 -> 127, 65..127 -> 127.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 40) == 79)
     #expect(Befehlskatalog.velocity(ausBefehlsdaten: 64) == 127)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 32) == 64)
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0) == 0)
-    // Werte über 64 saettigen — in zwei Testdateien betrifft das drei Viertel
-    // aller Velocities.
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 96) == 127)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 65) == 127)
     #expect(Befehlskatalog.velocity(ausBefehlsdaten: 127) == 127)
-    // Der andere Weg bleibt waehlbar, bis der Emulator entscheidet.
-    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 64, abbildung: .durchreichen) == 64)
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 0) == 0)
+    // Die beiden verworfenen Formeln ergaeben hier andere Werte.
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 40) != 80)   // nicht x2
+    #expect(Befehlskatalog.velocity(ausBefehlsdaten: 40) != 53)   // nicht Tutka
 }
 
 @Test func svolNachMIDI() {

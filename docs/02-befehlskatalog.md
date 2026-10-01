@@ -442,3 +442,62 @@ Bis dahin bleibt das Deckeln: OpenMPT macht es ebenso
 Zeilen 97–103) und kennt Befehlsseiten (`numpages`, `pagetable`). Die
 Amiga-Version des Autors kann MMD3-Dateien also laden — die 7-Bit-Frage lässt
 sich dort prüfen, ohne die Windows-Version zum Laufen zu bringen.
+
+## Zeitrechnung und Hold — aus der Playroutine und am Original gemessen
+
+### Die beiden Tempomodi
+
+`MED_PlayRoutine.i`, `_SetTempo`. OctaMED stellt den CIA-Timer ein; dessen
+Periode bestimmt die Tickrate.
+
+```asm
+.ST_bpm:                   ; BPM-Modus
+    MOVE.B  msng_flags2(A0),D1
+    AND.W   #$1F,D1
+    ADDQ.B  #1,D1          ; LPB = (flags2 & 0x1F) + 1
+    MULU    D1,D0          ; Tempo × LPB
+    MOVE.L  bpmdiv,D1
+    DIVU    D0,D1
+
+.calctempo:                ; SPD-Modus, Tempo > 10
+    MOVE.L  timerdiv,D1    ; timerdiv = 470000
+    DIVU    D0,D1          ; Periode = timerdiv / Tempo
+```
+
+Die `ADDQ.B #1` im BPM-Zweig **bestätigt die +1-Umrechnung des LPB-Feldes
+direkt im Originalcode** — unabhängig von der Messung am Tempo-Fenster.
+
+Für Tempo ≤ 10 im SPD-Modus gibt es eine Tabelle der SoundTracker-Tempi
+(2417, 4833, 7250 …). Im Testmaterial kommt das nicht vor.
+
+**SPD-Tempo 33** (Vorgabe eines neuen Songs): Periode `470000/33 = 14242`, bei
+709 379 Hz CIA-Takt also **49,81 Ticks je Sekunde**, ein Tick **20,08 ms** —
+die klassischen 50 Hz des Amiga.
+
+### Hold zählt Ticks
+
+Am Original gemessen, Testsong im SPD-Modus:
+
+| `hold` | Notenlänge |
+|---|---|
+| 1 | 1,656 s |
+| 32 | 2,276 s |
+| **Differenz** | **0,620 s** |
+
+31 Ticks × 20,08 ms = **0,6224 s**. Abweichung 0,4 %.
+
+Beide Messungen zerlegen sich als
+
+```
+Dauer = 1,634 s + hold × Tickdauer
+```
+
+Der Sockel von 1,634 s ist in beiden Fällen gleich — das war, was die Note
+sonst beendet hat. **Hold wirkt zusätzlich, nicht ausschliesslich**, und war
+deshalb im ersten Versuch fast unsichtbar: Der Sockel war achtmal so groß wie
+der Effekt.
+
+Das erklärt auch, warum die Pipe-Anzeige in alten Songs erscheint und sich in
+einem neuen nicht durch Tippen erzeugen lässt — sie stellt diesen Zustand dar.
+
+Umgesetzt in `MEDKit/Model/Timing.swift`.

@@ -121,6 +121,30 @@ enum TestFiles {
     #expect(C.volumeCommand(data: 0x90, encoding: .sevenBit) == .setDefaultVolume(16))
 }
 
+@Test func timingMatchesTheOriginal() throws {
+    // BPM-Modus: am Tempo-Fenster von OctaMED bestaetigt —
+    // O_Wie_Eine_Marionette.MMD zeigt dort Tempo 066, TPL 005, LPB 015.
+    guard let url = TestFiles.file("O_Wie_Eine_Marionette.MMD") else { return }
+    let song = try MEDLoader.load(file: url)
+    #expect(song.bpmMode)
+    #expect(song.defaultTempo == 66)
+    #expect(song.ticksPerRow == 5)
+    #expect(song.rowsPerBeat == 15)
+    let row = try #require(Timing.rowDuration(song: song))
+    #expect(abs(row - 60.0 / (66.0 * 15.0)) < 1e-9)
+}
+
+@Test func spdTimingFollowsTheCIATimer() {
+    // SPD-Modus, Tempo 33 (Vorgabe eines neuen Songs): die Playroutine setzt
+    // die CIA-Periode auf 470000/33 = 14242, bei 709379 Hz also 49,81 Ticks
+    // je Sekunde — die klassischen 50 Hz.
+    let period = (470_000.0 / 33.0).rounded(.down)
+    let tick = period / Timing.ciaClockPAL
+    #expect(abs(tick - 0.020077) < 1e-5)
+    // Am Original gemessen: hold 1 gegen hold 32 ergab 0,620 s Unterschied.
+    #expect(abs(31 * tick - 0.620) < 0.005)
+}
+
 @Test func svolToMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)

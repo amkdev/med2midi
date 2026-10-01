@@ -133,17 +133,9 @@ final class Store {
     /// **Noch nicht berücksichtigt:** Tempowechsel per Befehl `0F` und `09`.
     /// Das gehört in die Player-Simulation der Phase 2.
     var secondsPerRow: Double? {
-        guard let s = current?.song else { return nil }
-        if s.bpmMode {
-            let bpm = Double(s.defaultTempo)
-            guard bpm > 0 else { return nil }
-            return 60.0 / (bpm * Double(s.rowsPerBeat))
-        }
-        // Nicht-BPM-Modus: Ticks pro Zeile bei 50 Hz Amiga-Raster.
-        let ticks = Double(s.ticksPerRow)
-        let tempo = Double(s.defaultTempo)
-        guard ticks > 0, tempo > 0 else { return nil }
-        return ticks * (2.5 / tempo)
+        guard let s = current?.song, s.ticksPerRow > 0 else { return nil }
+        guard let tick = Timing.tickDuration(song: s) else { return nil }
+        return tick * Double(s.ticksPerRow)
     }
 
     /// Zeit ab Blockanfang bis zur aktuellen Zeile.

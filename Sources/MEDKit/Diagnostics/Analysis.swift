@@ -70,21 +70,27 @@ extension MEDLoader {
                 art: .cmd3xMissing(command: number),
                 locations: locations[number] ?? [], count: counts[number] ?? 0))
         }
-        // Die Lesart der 0C-Werte hängt vom Block ab: trägt er eine
-        // Befehlserweiterung, sind die Werte 7-bittig (0–127), sonst gilt
-        // FLAG_VOLHEX. Dass dieselben Daten je nach Modus andere Velocities
-        // ergeben, ist am Original gemessen.
+        // Werte ausserhalb 0–64 lassen den Befehl wirkungslos — die
+        // Grundlautstärke des Instruments bleibt stehen. Am Original gemessen.
+        // Im 7-Bit-Fall (Block mit Befehlserweiterung) gilt das nicht.
         let total = velocityValues.values.reduce(0, +)
         if total > 50, !sevenBit {
-            let saturated = velocityValues
-                .filter { CommandCatalog.velocity(ausBefehlsdaten: $0.key,
-                                                  lesart: volumeIsHex ? .hexadecimal : .decimal) >= 127 }
+            let encoding: CommandCatalog.VolumeEncoding = volumeIsHex ? .hexadecimal : .decimal
+            let withoutEffect = velocityValues
+                .filter { CommandCatalog.volumeCommand(data: $0.key, encoding: encoding) == .ignored }
                 .values.reduce(0, +)
-            let percentage = saturated * 100 / total
-            if percentage > 0 {
-                diagnostics.notices.append(Notice(
-                    message: "\(percentage) % der Velocities erreichen 127 "
-                        + "(Lesart: \(volumeIsHex ? "hexadezimal" : "dezimal"))"))
+            if withoutEffect > 0 {
+                let percentage = withoutEffect * 100 / total
+                if percentage >= 25 {
+                    diagnostics.warnings.append(Warning(
+                        art: .other("\(percentage) % der Velocity-Befehle (0C) liegen über 64 und "
+                            + "bleiben wirkungslos — es gilt dort die Grundlautstärke des Instruments"),
+                        locations: locations[0x0C] ?? [], count: withoutEffect))
+                } else {
+                    diagnostics.notices.append(Notice(
+                        message: "\(percentage) % der Velocity-Befehle liegen über 64 "
+                               + "und bleiben wirkungslos"))
+                }
             }
         }
 

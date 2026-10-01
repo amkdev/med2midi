@@ -129,12 +129,18 @@ public enum CommandCatalog {
         case .controllerNumber:
             return "Controller-Nummer auf CC\(b.data) setzen"
         case .velocity:
-            if let g = defaultVolumeSetting(ausBefehlsdaten: b.data) {
-                return "Grundlautstärke des Instruments auf \(g) setzen"
+            func beschreibe(_ e: VolumeEncoding) -> String {
+                switch volumeCommand(data: b.data, encoding: e) {
+                case .velocity(let v):          return "\(v)"
+                case .setDefaultVolume(let v):  return "Grundlautstärke \(v)"
+                case .ignored:                  return "ohne Wirkung"
+                }
             }
-            return "Velocity \(velocity(ausBefehlsdaten: b.data, lesart: .sevenBit)) "
-                 + "(7 Bit) · \(velocity(ausBefehlsdaten: b.data, lesart: .hexadecimal)) (hex) "
-                 + "· \(velocity(ausBefehlsdaten: b.data, lesart: .decimal)) (dezimal)"
+            if case .setDefaultVolume(let v) = volumeCommand(data: b.data, encoding: .hexadecimal) {
+                return "Grundlautstärke des Instruments auf \(v) setzen und damit spielen"
+            }
+            return "Velocity — 7 Bit: \(beschreibe(.sevenBit)) · "
+                 + "hex: \(beschreibe(.hexadecimal)) · dezimal: \(beschreibe(.decimal))"
         case .volumeController:
             return "Lautstärke CC7 = \(b.data)"
         case .pan:
@@ -199,49 +205,72 @@ public enum CommandCatalog {
         case decimal
     }
 
-    /// Velocity aus dem Datenbyte des Befehls `0C`.
+    /// Was ein `0C`-Befehl bewirkt.
     ///
-    /// **Am Original gemessen** (Amiga-Emulator, MIDI-Ausgang mit MIDI Monitor,
-    /// 2026-10-01): *dieselben* Patterndaten, nur der Anzeigemodus
-    /// umgeschaltet — Byte `0x40` ergibt im Hex-Modus 127, im Dezimalmodus 79.
-    /// Der Modus wird also beim Abspielen ausgewertet, nicht nur bei der
-    /// Anzeige.
+    /// Die Playroutine kennt drei Ausgänge, nicht einen. Quelle:
+    /// `MED_PlayRoutine.i`, Marke `.f_0c`, bestätigt durch Messung am Original.
+    public enum VolumeCommand: Equatable, Sendable {
+        /// Neue Velocity für die Spur.
+        case velocity(UInt8)
+        /// Wert ab `0x80`: setzt die Grundlautstärke des Instruments (0–64)
+        /// **und** spielt die Note damit.
+        case setDefaultVolume(UInt8)
+        /// Ausserhalb des gültigen Bereichs — der Befehl tut nichts. Die
+        /// zuletzt gesetzte Lautstärke der Spur bleibt stehen, bei einer
+        /// frischen Note also die Grundlautstärke des Instruments.
+        case ignored
+    }
+
+    /// Wirkung des Befehls `0C`.
     ///
-    /// Umrechnung in beiden skalierten Fällen:
+    /// **Am Original gemessen** (Amiga-Emulator, MIDI Monitor, 2026-10-01):
     ///
-    ///     velocity = min(⌊wert × 127 / 64⌋, 127)
+    /// | Datenbyte | Wirkung |
+    /// |---|---|
+    /// | `0x00`–`0x40` | Velocity, skaliert |
+    /// | `0x41`–`0x7F` | **nichts** — es gilt weiter die Grundlautstärke |
+    /// | `0x80`–`0xC0` | setzt die Grundlautstärke und spielt damit |
     ///
-    /// Ganzzahlig abgeschnitten ist das identisch mit „verdoppeln, von null
-    /// gezählt" (`2v − 1` für `v = 1…64`), weil `v × 127/64 = 2v − v/64`.
-    /// Beide Beschreibungen meinen dieselbe Funktion. Abschneiden, nicht
-    /// runden: mit Rundung käme bei `v = 32` fälschlich 64 statt 63 heraus.
+    /// Das deckt sich mit dem Assembler der Playroutine:
     ///
-    /// Im Fall `.sevenBit` wird **nicht** skaliert — der Wert ist bereits die
-    /// Velocity. Quelle: OpenMPT `Load_med.cpp`, Befehl 0x0C, dritte
-    /// Verzweigung (`(param & 0x7F + 1) / 2` rechnet dort auf die interne
-    /// 0–64-Skala herunter).
+    /// ```asm
+    /// .volhex:
+    ///     CMP.B   #64,D0
+    ///     BHI.S   .go_nocmd      ; über 64: Befehl verwerfen
+    /// .plr_setvol:
+    ///     MOVE.B  D0,trk_prevvol(A5)
+    /// ```
     ///
-    /// Werte ab `0x80` setzen laut Handbuch die Grundlautstärke des
-    /// Instruments (`$80`–`$C0` für 0–64) statt die Notenlautstärke. In den
-    /// sieben Testdateien kommt das in über 11 000 `0C`-Befehlen **kein
-    /// einziges Mal** vor; die Diagnose meldet es, falls doch.
-    public static func velocity(ausBefehlsdaten byte: UInt8,
-                                lesart: VolumeEncoding) -> UInt8 {
-        if byte >= 0x80 { return 0 }   // setzt die Grundlautstärke, keine Note
-        switch lesart {
+    /// Der Zweig steht dort in einem `IFNE CHECK`, und KONEYs Demo-Fassung
+    /// setzt `CHECK EQU 0`. Im echten OctaMED ist er aktiv — die Messung
+    /// entscheidet gegen den abgeschalteten Code.
+    ///
+    /// **Ausnahme `.sevenBit`:** Trägt der Block eine Befehlserweiterung, ist
+    /// der Wert bereits 0–127 und wird weder skaliert noch bei 64 begrenzt.
+    /// Sonst wären in den MMD3-Dateien drei Viertel aller `0C`-Befehle
+    /// wirkungslos. Quelle: OpenMPT `Load_med.cpp`, dritte Verzweigung.
+    public static func volumeCommand(data byte: UInt8,
+                                     encoding: VolumeEncoding) -> VolumeCommand {
+        // Bit 7 wird zuerst geprüft, vor der Lesart — wie im Assembler (BPL).
+        if byte >= 0x80 {
+            let v = byte & 0x7F
+            return v <= 64 ? .setDefaultVolume(v) : .ignored
+        }
+        switch encoding {
         case .sevenBit:
-            return byte & 0x7F
+            return .velocity(byte & 0x7F)
         case .hexadecimal:
-            return UInt8(min(min(Int(byte), 64) * 127 / 64, 127))
+            return byte <= 64 ? .velocity(scale(byte)) : .ignored
         case .decimal:
-            let value = Int(byte >> 4) * 10 + Int(byte & 0x0F)
-            return UInt8(min(value * 127 / 64, 127))
+            let v = Int(byte >> 4) * 10 + Int(byte & 0x0F)
+            return v <= 64 ? .velocity(scale(UInt8(v))) : .ignored
         }
     }
 
-    /// Grundlautstärke, die ein `0C`-Wert ab `0x80` setzt (0–64), sonst `nil`.
-    public static func defaultVolumeSetting(ausBefehlsdaten byte: UInt8) -> UInt8? {
-        byte >= 0x80 ? min(byte - 0x80, 64) : nil
+    /// 0–64 auf die MIDI-Velocity. Abgeschnitten, nicht gerundet:
+    /// `⌊v × 127/64⌋ == 2v − 1` für `v = 1…64` — Verdopplung mit Nullbasis.
+    private static func scale(_ v: UInt8) -> UInt8 {
+        UInt8(min(Int(v) * 127 / 64, 127))
     }
 
     /// Instrument-Grundlautstärke `svol` (0–64) in den MIDI-Bereich.

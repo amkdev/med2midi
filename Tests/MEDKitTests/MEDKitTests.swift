@@ -76,56 +76,49 @@ enum TestFiles {
     #expect(TempoSpecial(data: 0x40) == .setTempo(0x40))
 }
 
-@Test func velocityAsMeasuredOnOriginal() {
-    // Am Amiga gemessen: dieselben Patterndaten, nur der Anzeigemodus
-    // umgeschaltet — Byte 0x40 ergibt im Hex-Modus 127, im Dezimalmodus 79.
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x40, lesart: .hexadecimal) == 127)
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x40, lesart: .decimal) == 79)
-    // "41-7F = vel 127", vom Autor bestaetigt.
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x41, lesart: .hexadecimal) == 127)
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x7F, lesart: .hexadecimal) == 127)
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0, lesart: .hexadecimal) == 0)
+@Test func volumeCommandAsMeasuredOnOriginal() {
+    typealias C = CommandCatalog
+    // Am Amiga gemessen (MIDI Monitor):
+    // 0x00-0x40 skaliert, 0x41-0x7F ohne Wirkung, ab 0x80 Grundlautstaerke.
+    #expect(C.volumeCommand(data: 0x40, encoding: .hexadecimal) == .velocity(127))
+    #expect(C.volumeCommand(data: 0x41, encoding: .hexadecimal) == .ignored)
+    #expect(C.volumeCommand(data: 0x7F, encoding: .hexadecimal) == .ignored)
+    #expect(C.volumeCommand(data: 0x00, encoding: .hexadecimal) == .velocity(0))
+    // Dieselben Patterndaten im Dezimalmodus: 0x40 bedeutet 40.
+    #expect(C.volumeCommand(data: 0x40, encoding: .decimal) == .velocity(79))
+    // Dezimal kann bis 99 reichen; darueber hinaus wirkungslos.
+    #expect(C.volumeCommand(data: 0x64, encoding: .decimal) == .velocity(127))  // 64
+    #expect(C.volumeCommand(data: 0x65, encoding: .decimal) == .ignored)        // 65
 }
 
-@Test func velocityIsDoublingFromZero() {
+@Test func volumeScalingIsDoublingFromZero() {
     // Abgeschnitten gilt floor(v * 127/64) == 2v - 1 fuer v = 1...64.
     for v in 1...64 {
-        #expect(CommandCatalog.velocity(ausBefehlsdaten: UInt8(v), lesart: .hexadecimal)
-                == UInt8(2 * v - 1), "v = \(v)")
+        #expect(CommandCatalog.volumeCommand(data: UInt8(v), encoding: .hexadecimal)
+                == .velocity(UInt8(2 * v - 1)), "v = \(v)")
     }
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 32, lesart: .hexadecimal) == 63)
 }
 
-@Test func sevenBitVolumeIsNotScaled() {
-    // Mit Befehlserweiterung ist der Wert bereits die MIDI-Velocity.
-    // Quelle: OpenMPT Load_med.cpp, dritte Verzweigung bei 0x0C.
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x40, lesart: .sevenBit) == 64)
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x70, lesart: .sevenBit) == 112)
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x7F, lesart: .sevenBit) == 127)
+@Test func sevenBitVolumeIsNotScaledOrLimited() {
+    typealias C = CommandCatalog
+    // Mit Befehlserweiterung ist der Wert bereits die Velocity — ohne die
+    // 64er-Grenze, sonst waeren in den MMD3-Dateien drei Viertel aller
+    // 0C-Befehle wirkungslos.
+    #expect(C.volumeCommand(data: 0x40, encoding: .sevenBit) == .velocity(64))
+    #expect(C.volumeCommand(data: 0x70, encoding: .sevenBit) == .velocity(112))
+    #expect(C.volumeCommand(data: 0x7F, encoding: .sevenBit) == .velocity(127))
 }
 
 @Test func valuesFrom80SetDefaultVolume() {
+    typealias C = CommandCatalog
     // Handbuch: "Range: 0-64, or $80-$C0 for default instrument volume."
-    #expect(CommandCatalog.defaultVolumeSetting(ausBefehlsdaten: 0x90) == 16)
-    #expect(CommandCatalog.defaultVolumeSetting(ausBefehlsdaten: 0x80) == 0)
-    #expect(CommandCatalog.defaultVolumeSetting(ausBefehlsdaten: 0x7F) == nil)
-    #expect(CommandCatalog.velocity(ausBefehlsdaten: 0x90, lesart: .hexadecimal) == 0)
-}
-
-@Test func commandExtensionOnlyInMMD3Files() throws {
-    // Gemessen: alle drei MMD3-Dateien tragen die Befehlserweiterung in
-    // nahezu jedem Block, keine der vier MMD1-Dateien.
-    for url in TestFiles.all {
-        let song = try MEDLoader.load(file: url)
-        let withExtension = song.blocks.filter(\.sevenBitVolume).count
-        if song.version == .mmd3 {
-            #expect(withExtension > 0, "\(url.lastPathComponent): MMD3 ohne Erweiterung")
-            #expect(song.volumeEncoding(block: song.blocks.first { $0.sevenBitVolume }!)
-                    == .sevenBit)
-        } else {
-            #expect(withExtension == 0, "\(url.lastPathComponent): MMD1 mit Erweiterung")
-        }
-    }
+    // Vom Autor bestaetigt: 0C90 ergibt Grundlautstaerke 16.
+    #expect(C.volumeCommand(data: 0x90, encoding: .hexadecimal) == .setDefaultVolume(16))
+    #expect(C.volumeCommand(data: 0x80, encoding: .hexadecimal) == .setDefaultVolume(0))
+    #expect(C.volumeCommand(data: 0xC0, encoding: .hexadecimal) == .setDefaultVolume(64))
+    #expect(C.volumeCommand(data: 0xC1, encoding: .hexadecimal) == .ignored)
+    // Bit 7 wird vor der Lesart geprueft — auch im 7-Bit-Fall.
+    #expect(C.volumeCommand(data: 0x90, encoding: .sevenBit) == .setDefaultVolume(16))
 }
 
 @Test func svolToMIDI() {

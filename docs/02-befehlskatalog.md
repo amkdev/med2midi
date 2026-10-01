@@ -135,135 +135,96 @@ Tutka hat CC7 also um genau eine Stelle zu tief eingeordnet.
 
 ## Befehl `0C` (Velocity) — am Original gemessen
 
-**Gemessen am 2026-10-01**: OctaMED im Amiga-Emulator, MIDI-Ausgang mit
-MIDI Monitor mitgelesen. Entscheidend war der zweite Durchgang mit
-**denselben Patterndaten**, nur der Anzeigemodus umgeschaltet:
+**Gemessen im Amiga-Emulator mit MIDI Monitor** (2026-10-01). Drei Ausgänge,
+nicht einer:
 
-| gespeichertes Byte | Modus | gesendete Velocity |
+| Datenbyte | Wirkung |
+|---|---|
+| `0x00`–`0x40` | Velocity, skaliert |
+| `0x41`–`0x7F` | **nichts** — es gilt weiter die Grundlautstärke des Instruments |
+| `0x80`–`0xC0` | setzt die Grundlautstärke (Wert − `0x80`) und spielt damit |
+
+Das deckt sich mit dem Assembler der Playroutine (`MED_PlayRoutine.i`, `.f_0c`):
+
+```asm
+.volhex:
+    CMP.B   #64,D0
+    BHI.S   .go_nocmd      ; über 64: Befehl verwerfen
+.plr_setvol:
+    MOVE.B  D0,trk_prevvol(A5)
+```
+
+Der Zweig steht dort in einem `IFNE CHECK`, und KONEYs Demo-Fassung setzt
+`CHECK EQU 0`. Daraus wurde zwischenzeitlich geschlossen, die Prüfung sei
+belanglos — die Messung widerlegt das. Im echten OctaMED ist sie aktiv.
+
+**Warum die erste Messung irreführte:** `0C41`–`0C7F` ergab Velocity 127. Das
+sah nach Deckelung aus, war aber die Grundlautstärke 64 des Testinstruments,
+die nach dem Verwerfen weitergalt.
+
+### Die Skalierung
+
+```
+velocity = ⌊wert × 127 / 64⌋
+```
+
+Ganzzahlig abgeschnitten identisch mit „verdoppeln, von null gezählt"
+(`2v − 1` für `v = 1…64`), weil `v × 127/64 = 2v − v/64`. Beide Beschreibungen
+meinen dieselbe Funktion. Abschneiden, nicht runden.
+
+### Drei Lesarten des Datenbytes
+
+| Lesart | wann | Wert |
 |---|---|---|
-| `0x40` | hex | 127 |
-| `0x40` | dezimal | **79** |
-| `0x41`–`0x7F` | hex | 127 (gesättigt) |
+| `.sevenBit` | Block trägt eine Befehlserweiterung | Byte ist bereits 0–127, **keine** Skalierung, **keine** 64er-Grenze |
+| `.hexadecimal` | `FLAG_VOLHEX` gesetzt | Byte ist der Wert |
+| `.decimal` | `FLAG_VOLHEX` nicht gesetzt | Halbbytes sind Dezimalziffern: `0x40` = 40 |
 
-### Der Anzeigemodus wird beim Abspielen ausgewertet
+Die Dezimallesart ist am Original gemessen: Dieselben Patterndaten ergeben
+`0x40` → 127 im Hex-Modus und → 79 im Dezimalmodus. Der Anzeigemodus wird also
+beim Abspielen ausgewertet. Der Assembler bestätigt es:
 
-Dasselbe Byte ergibt je nach Modus eine andere Velocity. Das Byte hält also die
-**Ziffern**, nicht den Zahlenwert: `0x40` bedeutet im Hex-Modus 64, im
-Dezimalmodus 40. Der Modus steht als `FLAG_VOLHEX` (0x10) in
-`MMD0song.flags` — er ist damit **nicht** nur eine Anzeigeeinstellung und muss
-beim Export ausgewertet werden.
-
-### Die Umrechnung
-
-```
-velocity = min(⌊wert × 127 / 64⌋, 127)
+```asm
+    BTST    #4,msng_flags(A4)     ; FLAG_VOLHEX
+    BNE.S   .volhex
+    LSR.B   #4,D0 / MULU #10,D0   ; oberes Halbbyte × 10
+    MOVE.B  D4,D1 / AND.B #$0f,D1 ; unteres Halbbyte
+    ADD.B   D1,D0                 ; BCD
 ```
 
-Ganzzahlig abgeschnitten ist das **identisch** mit „verdoppeln, von null
-gezählt":
+Bei `.sevenBit` entfällt die 64er-Grenze — sonst wären in den MMD3-Dateien
+drei Viertel aller `0C`-Befehle wirkungslos. Quelle: OpenMPT `Load_med.cpp`,
+dritte Verzweigung bei `0x0C`.
 
-```
-⌊v × 127/64⌋ = 2v − 1     für v = 1 … 64
-```
+### Wirkung auf das Testmaterial
 
-denn `v × 127/64 = 2v − v/64`, und `v/64` liegt dort zwischen 0 und 1. Beide
-Beschreibungen meinen dieselbe Funktion; kein Messwert kann sie trennen.
-(Hinweis des Autors — eine frühere Fassung hier behauptete fälschlich, die
-Verdopplung sei widerlegt.)
+| Datei | Lesart | `0C` gesamt | wirkungslos | versch. Velocities |
+|---|---|---|---|---|
+| `N_WOISTDAS_MU80.med` | 7 Bit | 2819 | 0 | 58 |
+| `final_manchmaltriffteinlächeln2001.med` | 7 Bit | 5000 | 0 | 42 |
+| `final_soverloren.med` | 7 Bit | 1875 | 0 | 6 |
+| `N_ich_will_neues.mmd1` | hex | 3370 | **241 (7 %)** | 29 |
+| `O_Wie_Eine_Marionette.MMD` | dezimal | 3066 | 174 (5 %) | 51 |
+| `sehnsuchts_blues.MMD1.pp` | dezimal | 3785 | 5 | 50 |
+| `unsere_hände_spielen.MMD` | dezimal | 2041 | 1 | 40 |
 
-**Abschneiden, nicht runden.** Mit Rundung käme bei `v = 32` der Wert 64 statt
-63 heraus. Ein Test prüft die Gleichheit über den ganzen Bereich.
+In `N_ich_will_neues.mmd1` bewirkten 241 Velocity-Befehle nichts: die Werte 68,
+74, 80 und 96 liegen über 64. Dort galt jeweils die Grundlautstärke weiter.
+Die Diagnose meldet es ab 25 %.
 
-Widerlegt bleibt Tutkas `× 128/96`: das ergäbe bei 40 den Wert 53.
+### Umsetzung
 
-### Drei Lesarten, nicht zwei
-
-Die Lesart hängt nicht nur am Flag. OpenMPT `Load_med.cpp`, Befehl `0x0C`:
-
-```c
-if(!ctx.volHex && param < 0x99)
-    SetVolume((param >> 4) * 10 + (param & 0x0F));          // Dezimalziffern
-else if(ctx.volHex && !ctx.vol7bit)
-    SetVolume(std::min(param & 0x7F, 64));                   // Hexwert 0–64
-else if(ctx.volHex)
-    SetVolume(((param & 0x7F) + 1) / 2);                     // 7 Bit, hier
-                                                             // auf 0–64 herunter
-```
-
-Der dritte Fall gilt, wenn `vol7bit` gesetzt ist — dann ist der gespeicherte
-Wert **bereits 0–127** und wird nicht skaliert. Für MIDI ist er direkt die
-Velocity.
-
-### Die undokumentierte Befehlserweiterung
-
-`vol7bit` setzt OpenMPT, wenn der Block eine **Befehlserweiterung** trägt. Deren
-Zeiger steht in `BlockInfo` auf dem ersten der fünf Felder, die Kinnunens
-Spezifikation als `reserved[5]` führt:
-
-```c
-struct MMDBlockInfo {
-    uint32be highlightMaskOffset;
-    uint32be nameOffset;
-    uint32be nameLength;
-    uint32be pageTableOffset;
-    uint32be cmdExtTableOffset;   // undokumentiert, Offset 16
-    uint32be reserved[4];
-};
-```
-
-Die Tabelle enthält ein **zweites Parameterbyte je Zelle und Befehlsseite**.
-
-**Gemessen an den sieben Dateien:**
-
-| Datei | Kennung | Blöcke mit `BlockInfo` | davon mit Erweiterung |
-|---|---|---|---|
-| `N_WOISTDAS_MU80.med` | MMD3 | 25 | **24** |
-| `final_manchmaltriffteinlächeln2001.med` | MMD3 | 21 | **21** |
-| `final_soverloren.med` | MMD3 | 28 | **28** |
-| alle vier MMD1-Dateien | MMD1 | — | **0** |
-
-Damit klärt sich der scheinbare Widerspruch: Die beiden Dateien, deren
-Lautstärkewerte als Hex gelesen zu 98 % bzw. 91 % sättigten, tragen die
-Erweiterung — ihre Werte sind 7-bittig und ergeben eine saubere Dynamikleiter
-(64, 80, 96, 112), keine Sättigung.
-
-Inhaltlich spiegelt das Erweiterungsbyte bei `0C` meist den normalen
-Datenwert. OpenMPT wertet es nur für die Mix-Modus-Befehle `0x20` und `0x29`
-aus — für MIDI belanglos. Entscheidend ist sein **Vorhandensein**.
-
-### Ergebnis je Datei
-
-| Datei | Lesart | Velocity-Bereich | verschiedene Werte |
-|---|---|---|---|
-| `N_WOISTDAS_MU80.med` | 7 Bit | 7–127 | 58 |
-| `final_manchmaltriffteinlächeln2001.med` | 7 Bit | 0–127 | 42 |
-| `final_soverloren.med` | 7 Bit | 48–112 | 6 |
-| `N_ich_will_neues.mmd1` | hexadezimal | 0–127 | 29 |
-| `O_Wie_Eine_Marionette.MMD` | dezimal | 0–127 | 52 |
-| `sehnsuchts_blues.MMD1.pp` | dezimal | 3–127 | 50 |
-| `unsere_hände_spielen.MMD` | dezimal | 15–127 | 40 |
-
-Keine Datei sättigt mehr auffällig. Die frühere Warnung über ein „unplausibles
-Flag" ist damit gegenstandslos und entfernt.
-
-### Werte ab `0x80`: Grundlautstärke statt Note
-
-Handbuch: „Range: 0-64, or **$80-$C0 for default instrument volume**."
-Vom Autor am Original bestätigt: `0C90` setzt die Instrumentlautstärke auf 16
-(`0x90 − 0x80 = 0x10`), sichtbar im Fenster *Instrumenten Parameter*.
-
-In den sieben Dateien kommt das in über **11 000** `0C`-Befehlen **kein
-einziges Mal** vor. `Befehlskatalog.grundlautstärke(ausBefehlsdaten:)` deckt den
-Fall ab, die Diagnose meldet ihn, falls er auftritt.
-
-OpenMPT lässt ihn aus („which we don't support"), Tutka ebenfalls.
+`CommandCatalog.volumeCommand(data:encoding:)` gibt `.velocity`,
+`.setDefaultVolume` oder `.ignored` zurück. Die Player-Simulation führt die
+Spurlautstärke mit (entspricht `trk_prevvol` im Assembler) und lässt sie bei
+`.ignored` unverändert.
 
 ### Nicht zu verwechseln: `svol`
 
-Die Instrument-Grundlautstärke `svol` (0–64) wird verdoppelt **ohne** die
-Nullbasis: Das undokumentierte Feld der 24-Byte-`InstrExt` zeigt 47→94, 49→98,
-48→96, 64→127, 32→64, 50→100. Mit `⌊v × 127/64⌋` ergäbe 47 den Wert 93,
-gemessen ist 94. Zwei Größen, zwei Formeln.
+Die Instrument-Grundlautstärke `svol` (0–64) wird **verdoppelt ohne Nullbasis**:
+Das undokumentierte Feld der 24-Byte-`InstrExt` zeigt 47→94, 49→98, 48→96,
+64→127, 32→64, 50→100. Mit `⌊v × 127/64⌋` ergäbe 47 den Wert 93, gemessen ist
+94. Zwei Größen, zwei Formeln.
 
 ## Sample-Instrumente kommen vor — anders als im Projekt-Prompt angenommen
 

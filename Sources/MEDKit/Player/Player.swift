@@ -15,9 +15,19 @@ public struct Player {
 
     /// Added to a MED note number to get the MIDI note.
     ///
-    /// **Unverified.** See `transposed(_:instrument:)` for the evidence that
-    /// this is wrong; one measurement on the original settles it.
-    public static let noteOffset = 35
+    /// **Measured on the original** (2026-10-04): a `C-2` in the pattern, with
+    /// song and instrument transpose at zero, arrived as `C-1` in MIDI Monitor
+    /// with its note format set to "Middle C = C3" — that is MIDI note 12.
+    /// `C-2` is MED note 13, so the offset is −1: MED note 1 maps to MIDI 0.
+    ///
+    /// OctaMED simply names its octaves one higher than MIDI Monitor does;
+    /// the numbers pass through nearly unchanged.
+    ///
+    /// Cross-check on the real songs: with this offset the instruments land
+    /// where they belong — OrganBass 24–48, Piano 36–86, Trumpet 64–72. The
+    /// very low notes in the material all belong to the author's silent
+    /// `MidiControlChannel_…` lanes, whose notes only set the channel context.
+    public static let noteOffset = -1
 
     public struct Result: Sendable {
         public let events: [MIDIEvent]

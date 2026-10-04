@@ -615,3 +615,37 @@ Für die neue Note bleibt es wirkungslos.
 Der Autor über die Fundstelle in `final_soverloren.med`: „erzeugt kein note off
 — das wird ignoriert, inhaltlicher Fehler des Autors." Der Export darf diese
 Zellen also wie eine gewöhnliche Note behandeln.
+
+## Oktavlage: MED-Note minus eins
+
+**Am Original gemessen** (2026-10-04). Ein `C-2` im Pattern, Song- und
+Instrumenttransponierung auf null, erschien in MIDI Monitor als `C-1` bei der
+Einstellung **Middle C = C3** — das ist MIDI-Note **12**.
+
+`C-2` ist in MED die Notennummer **13** (C-1 ist 1). Der Versatz ist damit
+**−1**: MED-Note 1 wird MIDI 0.
+
+OctaMED benennt seine Oktaven schlicht eine höher als MIDI Monitor in dieser
+Einstellung; die Zahlen gehen fast unverändert durch.
+
+### Gegenprobe am Material
+
+Mit diesem Versatz landen die klingenden Instrumente dort, wo sie hingehören:
+
+| Instrument | MIDI | |
+|---|---|---|
+| `OrganBass` | 24–48 | Bass |
+| `Piano` | 36–86 | Klavierumfang |
+| `Trumpet` | 64–72 | Trompetenlage |
+| `Bass` | 28–42 | |
+| `DrumSet` (Kanal 10) | 28–84 | |
+
+Die sehr tiefen Noten im Material (bis MIDI 10) stammen **ausschliesslich von
+den stummen `MidiControlChannel_…`-Spuren** mit Lautstärke 0. Ihre Noten setzen
+nur den Kanalbezug für die folgenden Controller-Befehle und klingen nicht.
+
+Eine frühere Fassung rechnete mit **+35** — geraten, und um fast drei Oktaven
+daneben. Aufgefallen ist es beim Durchsehen der Ereignisliste, bevor eine Datei
+geschrieben wurde.
+
+`Player.noteOffset` ist die eine Stelle, an der das steht.

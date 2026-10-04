@@ -327,6 +327,39 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
     #expect(missing.isEmpty, "\(missing.count) Controller-Werte ohne Nummer")
 }
 
+@Test func noteOffsetMatchesTheMeasurement() {
+    // Am Original gemessen: ein C-2 im Pattern (MED-Note 13) kam als MIDI 12
+    // an — MIDI Monitor zeigte "C-1" bei der Einstellung Middle C = C3.
+    #expect(Player.noteOffset == -1)
+    // MED-Note 1 ist C-1 und wird damit MIDI 0.
+    #expect(1 + Player.noteOffset == 0)
+    #expect(13 + Player.noteOffset == 12)
+}
+
+@Test func instrumentsLandInSensibleRanges() throws {
+    // Gegenprobe am Material: die klingenden Instrumente muessen in
+    // musikalisch plausiblen Lagen liegen. Die stummen Controller-Spuren
+    // (Lautstaerke 0) bleiben aussen vor, ihre Noten setzen nur den Kanal.
+    guard let url = TestFiles.file("unsere_hände_spielen.MMD") else { return }
+    let song = try MEDLoader.load(file: url)
+    let result = Player(song: song).run()
+    var byInstrument: [Int: (low: Int, high: Int)] = [:]
+    for event in result.events {
+        guard case .noteOn(let note, let velocity) = event.kind,
+              velocity > 0, let instrument = event.instrument else { continue }
+        var range = byInstrument[instrument] ?? (127, 0)
+        range.low = min(range.low, Int(note))
+        range.high = max(range.high, Int(note))
+        byInstrument[instrument] = range
+    }
+    for instrument in song.instruments where instrument.sounds {
+        guard let range = byInstrument[instrument.number] else { continue }
+        let befund = "Instrument \(instrument.number) „\(instrument.name)“: "
+            + "MIDI \(range.low)–\(range.high)"
+        #expect(range.low >= 20 && range.high <= 108, "\(befund)")
+    }
+}
+
 @Test func svolToMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)

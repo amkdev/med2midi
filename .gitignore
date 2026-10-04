@@ -6,5 +6,6 @@ __pycache__/
 *.xcuserstate
 # Songdateien werden bewusst nicht versioniert (privates Material)
 DerivedData/
+export/
 songs/
 xcuserdata/

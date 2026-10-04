@@ -281,6 +281,52 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
     if total > 0 { #expect(total == 4480, "\(total) Nachrichten statt 4480") }
 }
 
+@Test func playerBalancesNoteOnsAndOffs() throws {
+    // Jede Note muss beendet werden — sonst haengt der Klangerzeuger.
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        let result = Player(song: song).run()
+        var ons = 0, offs = 0
+        for event in result.events {
+            if case .noteOn = event.kind { ons += 1 }
+            if case .noteOff = event.kind { offs += 1 }
+        }
+        #expect(ons == offs, "\(url.lastPathComponent): \(ons) Note On, \(offs) Note Off")
+        #expect(ons > 0)
+    }
+}
+
+@Test func playerStopsAtTheStopCommand() throws {
+    // Jeder Song hat genau ein erreichbares 0F FE an der letzten
+    // Sequenzposition. Danach darf nichts mehr kommen.
+    guard let url = TestFiles.file("N_WOISTDAS_MU80.med") else { return }
+    let song = try MEDLoader.load(file: url)
+    let result = Player(song: song).run()
+    // Block 26 bricht in Zeile 1 von 128 ab — ohne Auswertung waeren es
+    // 126 Zeilen mehr.
+    let rowTicks = Player.ppq / song.rowsPerBeat
+    let withoutStop = result.lengthInTicks + 126 * rowTicks
+    #expect(result.lengthInTicks < withoutStop)
+    // Kein Ereignis darf hinter dem Ende liegen.
+    #expect(result.events.allSatisfy { $0.tick <= result.lengthInTicks })
+}
+
+@Test func controllerNumberIsKeptPerTrack() throws {
+    // In sehnsuchts_blues steht das 05 in Zeile 0 ohne Instrument, der
+    // zugehoerige 00-Wert erst in Zeile 1 auf einem anderen Kanal. Pro Kanal
+    // gespeichert gingen die Controller-Werte verloren.
+    guard let url = TestFiles.file("sehnsuchts_blues.MMD1.pp") else { return }
+    let song = try MEDLoader.load(file: url)
+    let result = Player(song: song).run()
+    let cc74 = result.events.filter {
+        if case .controlChange(let c, _) = $0.kind { return c == 74 }
+        return false
+    }
+    #expect(cc74.count > 400, "nur \(cc74.count) CC74-Ereignisse")
+    let missing = result.warnings.filter { $0.contains("ohne vorherige Nummer") }
+    #expect(missing.isEmpty, "\(missing.count) Controller-Werte ohne Nummer")
+}
+
 @Test func svolToMIDI() {
     // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
     #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)

@@ -14,6 +14,8 @@ struct Options {
     var page = 0
     var patternOnly = false
     var exportFolder: String?
+    var events = false
+    var eventLimit = 60
 }
 
 func range(_ s: String, standard: Range<Int>) -> Range<Int> {
@@ -33,6 +35,8 @@ while i < args.count {
     case "--spuren": i += 1; o.tracks = range(args[i], standard: 0..<0)
     case "--seite":  i += 1; o.page = Int(args[i]) ?? 0
     case "--export": i += 1; o.exportFolder = args[i]
+    case "--events": o.events = true
+    case "--alle": o.eventLimit = Int.max
     case "--hilfe", "-h":
         print("""
         medprobe [--block N [--zeilen A-B] [--spuren A-B] [--seite N]] <datei> …
@@ -42,6 +46,9 @@ while i < args.count {
 
         medprobe --export <ordner> <datei> …
           schreibt die SysEx-Dumps als .syx samt Manifest
+
+        medprobe --events [--alle] <datei> …
+          spielt den Song durch und listet die MIDI-Ereignisse
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -63,6 +70,15 @@ for pfad in o.files {
         song = try MEDLoader.load(file: url)
     } catch {
         print("\(url.lastPathComponent): FEHLER — \(error)")
+        continue
+    }
+
+    if o.events {
+        let result = Player(song: song).run()
+        print(EventListing.text(for: result, song: song, limit: o.eventLimit))
+        print()
+        print(EventListing.summary(for: result, song: song))
+        print()
         continue
     }
 

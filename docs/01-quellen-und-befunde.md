@@ -458,3 +458,26 @@ Ein Block mit 512 Zeilen dauert damit 31 Sekunden.
 **Noch offen:** Tempowechsel per Befehl `0F` und `09` während des Stücks. Die
 Zeitanzeige der App rechnet mit dem Grundtempo; die Player-Simulation der
 Phase 2 muss die Wechsel mitführen.
+
+## Reproduzierbarkeit des Exports
+
+Zweimal derselbe Binärstand auf dieselbe Datei muss dieselben Bytes liefern.
+Das war eine Zeit lang nicht so, und es wäre fast durchgerutscht — aufgefallen
+ist es nur, weil ein Vergleich vorher/nachher Abweichungen zeigte, die die
+geprüfte Änderung gar nicht erklären konnte.
+
+Zwei Ursachen:
+
+1. **`Array.sort` ist in Swift nicht stabil.** Bei gleichem Tick und gleichem
+   Rang darf es die Reihenfolge frei wählen. Gelöst durch die
+   Eingangsreihenfolge als letztes Vergleichskriterium — damit ist die Ordnung
+   total.
+2. **Dictionary-Reihenfolge streut je Prozess.** Swift würfelt den Hash-Seed
+   beim Start neu. `releaseExpired` lief unsortiert über die Spuren und
+   sortierte die Note-Off-Ereignisse dadurch bei jedem Lauf anders ein.
+
+Der Test dazu greift nur prozessintern — der Hash-Seed ist je Prozess gleich,
+und genau dieser Test hätte den Fehler nicht gefunden. Die eigentliche Probe
+geht über getrennte Läufe:
+
+    medprobe --midi a songs/* ; medprobe --midi b songs/* ; diff -r a b

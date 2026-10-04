@@ -275,11 +275,25 @@ public enum CommandCatalog {
 
     /// Instrument-Grundlautstärke `svol` (0–64) in den MIDI-Bereich.
     ///
-    /// Dies ist **belegt**, anders als die Velocity oben: Das undokumentierte
-    /// Feld der 24-Byte-`InstrExt` enthält genau diesen Wert, und der Vergleich
-    /// ergab `svol × 2`, gedeckelt bei 127 — 47→94, 49→98, 48→96, 64→127,
-    /// 32→64, 50→100. Alle sechs Messwerte passen.
+    /// Dieselbe Skalierung wie beim Befehl `0C`, und aus demselben Grund: Die
+    /// Abspielroutine kennt nur **eine** Lautstärke je Spur. Jede Zelle mit
+    /// Instrumentnummer setzt sie auf `inst_svol`
+    ///
+    ///     MOVE.B inst_svol(A0),trk_prevvol(A5)  ;vol of this instr
+    ///
+    /// und `0C` überschreibt dasselbe Feld. Was danach als Velocity
+    /// hinausgeht, durchläuft denselben Weg — eine zweite Formel kann es
+    /// nicht geben.
+    ///
+    /// Maßgeblich ist die Messung am MIDI-Ausgang: `C40` in Hex-Anzeige
+    /// (Wert 64) ergab 127, in Dezimalanzeige (Wert 40) ergab 79. Das ist
+    /// `⌊v × 127/64⌋`, nicht `v × 2` — Letzteres ergäbe 80.
+    ///
+    /// Das undokumentierte Feld der 24-Byte-`InstrExt` enthält `svol × 2`
+    /// (gemessen: 47→94, 49→98, 48→96, 64→127, 32→64, 50→100). Das belegt
+    /// aber nur, was in der **Datei** steht, nicht was gesendet wird; die
+    /// beiden Formeln unterscheiden sich ohnehin nur um eins.
     public static func midiVolume(ausSvol svol: UInt8) -> UInt8 {
-        UInt8(min(Int(svol) * 2, 127))
+        scale(min(svol, 64))
     }
 }

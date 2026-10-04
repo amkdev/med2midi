@@ -132,11 +132,21 @@ public struct Instrument: Sendable {
     public var isMIDI: Bool { midiChannel > 0 }
     public var sounds: Bool { isMIDI && defaultVolume > 0 }
 
-    /// Anfangslautstärke für den Export. Wo das undokumentierte Feld vorliegt,
-    /// ist es der genauere Wert — es ist bereits die Zahl, die das schreibende
-    /// Programm gesendet hätte.
+    /// Anfangslautstärke als MIDI-Velocity.
+    ///
+    /// Immer aus `svol` gerechnet, auch wenn das undokumentierte Feld
+    /// vorliegt. Die Abspielroutine kennt nur **eine** Lautstärke je Spur:
+    /// Jede Zelle mit Instrumentnummer setzt sie auf `inst_svol`, Befehl `0C`
+    /// überschreibt dasselbe Feld, und was danach hinausgeht, nimmt denselben
+    /// Weg. Zwei Umrechnungen kann es nicht geben.
+    ///
+    /// Das Feld `midiVolume` enthält `svol × 2` (gemessen: 47→94, 50→100),
+    /// die Messung am MIDI-Ausgang ergibt dagegen `⌊svol × 127/64⌋` —
+    /// `C40` in Dezimalanzeige wurde als Velocity 79 empfangen, nicht 80.
+    /// Beides unterscheidet sich um genau eins. Das Dateifeld bleibt
+    /// zugänglich, aber es ist nicht die gesendete Velocity.
     public var initialMIDIVolume: UInt8 {
-        midiVolume ?? CommandCatalog.midiVolume(ausSvol: defaultVolume)
+        CommandCatalog.midiVolume(ausSvol: defaultVolume)
     }
 }
 

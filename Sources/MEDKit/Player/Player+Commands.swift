@@ -61,9 +61,14 @@ extension Player {
     }
 
     /// Emits note-offs for every note whose hold has run out before `limit`.
+    ///
+    /// Nach Spurnummer sortiert, nicht in Dictionary-Reihenfolge: Swift
+    /// streut die Hashes je Prozess neu, sodass die Ereignisse sonst bei
+    /// jedem Lauf anders einsortiert würden. Zwei Läufe desselben
+    /// Binärstands lieferten unterschiedliche Dateien.
     func releaseExpired(upTo limit: Int,
                         events: inout [MIDIEvent], tracks: inout [Int: TrackStateBox]) {
-        for (track, state) in tracks {
+        for (track, state) in tracks.sorted(by: { $0.key < $1.key }) {
             guard let sounding = state.sounding, let expiry = state.holdExpiry,
                   expiry < limit else { continue }
             events.append(MIDIEvent(tick: max(expiry, sounding.startTick + 1),
@@ -99,7 +104,7 @@ extension Player {
     func apply(command: Command, cell: Cell, track: Int, block: Block,
                instrument: Instrument?, at tick: Int, location: SourceLocation,
                events: inout [MIDIEvent], tracks: inout [Int: TrackStateBox],
-               warnings: inout [String],
+               warnings: inout [String], defaultVolumes: inout [Int: UInt8],
                tempoValue: inout Int, ticksPerLine: inout Int, stopped: inout Bool) {
 
         let channel = instrument?.midiChannel ?? 0
@@ -115,8 +120,13 @@ extension Player {
             switch CommandCatalog.volumeCommand(data: command.data,
                                                 encoding: encoding(for: block)) {
             case .velocity(let v):          tracks[track, default: TrackStateBox()].velocity = v
-            case .setDefaultVolume(let v):  tracks[track, default: TrackStateBox()].velocity =
-                                                CommandCatalog.midiVolume(ausSvol: v)
+            case .setDefaultVolume(let v):
+                // Schreibt die Grundlautstärke des Instruments um und setzt
+                // zugleich die laufende Spurlautstärke — der Handler fällt
+                // nach `inst_svol` in `.plr_setvol` durch.
+                if let number = instrument?.number { defaultVolumes[number] = v }
+                tracks[track, default: TrackStateBox()].velocity =
+                    CommandCatalog.midiVolume(ausSvol: v)
             case .ignored:                  break      // previous volume stands
             }
 

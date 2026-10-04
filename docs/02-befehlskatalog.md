@@ -649,3 +649,54 @@ daneben. Aufgefallen ist es beim Durchsehen der Ereignisliste, bevor eine Datei
 geschrieben wurde.
 
 `Player.noteOffset` ist die eine Stelle, an der das steht.
+
+## Velocity gilt nur bis zur nächsten Instrumentnummer
+
+**Am Assembler belegt**, nachdem der Autor in Bitwig eine Lautstärkeabsenkung
+hörte, die es in OctaMED nicht gibt (Sequenz 014 in „Wie eine Marionette").
+
+Die Abspielroutine kennt **eine** Lautstärke je Spur, `trk_prevvol`. Je Zeile
+geschieht dreierlei, in dieser Reihenfolge:
+
+1. **Instrumentnummern-Schleife** — jede Zelle mit Instrumentnummer setzt
+   `MOVE.B inst_svol(A0),trk_prevvol(A5)` — die Grundlautstärke des Instruments
+2. **`DoPreFXLoop`** → `.f_0c` überschreibt `trk_prevvol` mit dem Befehlswert
+3. **Notenschleife** → `_PlayNote` sendet mit `trk_prevvol` als Velocity
+
+Ein `0C` wirkt damit **nur bis zur nächsten Instrumentnummer**. Da Notenzellen
+in OctaMED praktisch immer eine Instrumentnummer tragen, heißt das: `0C` gilt
+für seine eigene Zeile.
+
+Der Player hatte den Wert stattdessen bis zum Songende mitgeschleppt. In
+„Wie eine Marionette" bekommt Spur 0 — die Hauptdrumspur mit 683 Noten — ihren
+ersten `0C` bei Songposition 13 (OctaMED zählt ab 1: Sequenz 014). Davor
+spielte sie mit 127, danach dauerhaft mit 59. Genau der Sprung, den der Autor
+hörte.
+
+### Nur eine Umrechnung, nicht zwei
+
+Weil `0C` und die Grundlautstärke in dasselbe Feld schreiben, muss auch die
+Umrechnung nach MIDI dieselbe sein: `⌊v × 127/64⌋`. Maßgeblich ist die Messung
+am MIDI-Ausgang — `C40` in Dezimalanzeige (Wert 40) kam als Velocity **79** an,
+nicht 80.
+
+Das undokumentierte Feld der 24-Byte-`InstrExt` enthält dagegen `svol × 2`
+(gemessen: 47→94, 49→98, 48→96, 64→127, 32→64, 50→100). Es belegt, was in der
+**Datei** steht, nicht was gesendet wird. Die beiden Formeln unterscheiden sich
+um genau eins.
+
+**Offen, mit einer Messung zu klären:** Eine Note auf einem Instrument mit
+`svol 47` ohne `0C` spielen und die Velocity ablesen — 93 bestätigt die hier
+verwendete Formel, 94 das Dateifeld.
+
+### `0C` mit gesetztem höchstem Bit
+
+Schreibt die Grundlautstärke des Instruments dauerhaft um:
+
+    MOVE.B D0,inst_svol(A4,D1.W)   ;set new svol
+
+und fällt dann in `.plr_setvol` durch, setzt also zusätzlich die laufende
+Spurlautstärke. Das deckt sich mit der Beobachtung des Autors bei `C80`.
+
+In den sieben vorliegenden Dateien kommt es **kein einziges Mal** vor: 22 046
+`0C`-Befehle, davon 0 mit gesetztem Bit. Abgebildet ist es trotzdem.

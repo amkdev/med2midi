@@ -43,8 +43,11 @@ public struct Player {
         var sounding: (note: UInt8, channel: UInt8, instrument: UInt8, startTick: Int)?
         /// Tick at which the hold counter runs out; `nil` means unlimited.
         var holdExpiry: Int?
-        /// Velocity set with command 0C; carried over until changed, like
-        /// `trk_prevvol` in the assembler.
+        /// Current velocity, mirroring `trk_prevvol` in the assembler.
+        ///
+        /// Set from the instrument's default volume by every cell that carries
+        /// an instrument number, and overwritten by command 0C for the rows
+        /// that follow until the next instrument number.
         var velocity: UInt8?
         /// Controller number chosen with command 05.
         ///
@@ -75,6 +78,9 @@ public struct Player {
         var events: [MIDIEvent] = []
         var warnings: [String] = []
         var tracks: [Int: TrackStateBox] = [:]
+        // Grundlautstärken, die ein `0C` mit gesetztem höchsten Bit zur
+        // Laufzeit überschrieben hat — siehe `defaultVolume(of:overrides:)`.
+        var defaultVolumes: [Int: UInt8] = [:]
         var tick = 0
         var ticksPerRow = Self.ppq / max(song.rowsPerBeat, 1)
         var tempoValue = Int(song.defaultTempo)
@@ -106,7 +112,23 @@ public struct Player {
                 for track in 0..<block.tracks {
                     let cell = block.cell(row: row, track: track)
                     var state = tracks[track] ?? TrackStateBox()
-                    if cell.instrument != 0 { state.instrument = cell.instrument }
+                    if cell.instrument != 0 {
+                        state.instrument = cell.instrument
+                        // A cell carrying an instrument number resets the track
+                        // volume to that instrument's default. In the play
+                        // routine this happens in the instrument loop, before
+                        // the effects run:
+                        //
+                        //     MOVE.B inst_svol(A0),trk_prevvol(A5)  ;vol of this instr
+                        //
+                        // Command 0C writes `trk_prevvol` afterwards, in
+                        // DoPreFXLoop, and the note is sounded after that. A
+                        // velocity therefore reaches only the notes up to the
+                        // next instrument number — it is not carried through
+                        // the song.
+                        state.velocity = instrumentFor(cell.instrument)
+                            .map { defaultVolume(of: $0, overrides: defaultVolumes) }
+                    }
                     tracks[track] = state
 
                     let location = SourceLocation(block: blockNumber, blockname: block.name,
@@ -120,7 +142,7 @@ public struct Player {
                               block: block,
                               instrument: instrument, at: tick, location: location,
                               events: &events, tracks: &tracks,
-                              warnings: &warnings,
+                              warnings: &warnings, defaultVolumes: &defaultVolumes,
                               tempoValue: &tempoValue, ticksPerLine: &ticksPerLine,
                               stopped: &stopped)
                     }
@@ -153,11 +175,40 @@ public struct Player {
             tracks[track]?.sounding = nil
         }
 
-        events.sort { $0.tick != $1.tick ? $0.tick < $1.tick : $0.order < $1.order }
+        // Stabil sortieren. Swifts `sort` ist es nicht: Bei gleichem Tick und
+        // gleichem Rang darf es die Reihenfolge frei wählen, und es tut das
+        // auch — zwei Läufe desselben Binärstands lieferten unterschiedliche
+        // Dateien. Die Eingangsreihenfolge als letztes Kriterium macht die
+        // Ordnung total und den Export damit reproduzierbar.
+        events = events.enumerated()
+            .sorted { a, b in
+                if a.element.tick != b.element.tick { return a.element.tick < b.element.tick }
+                if a.element.order != b.element.order { return a.element.order < b.element.order }
+                return a.offset < b.offset
+            }
+            .map(\.element)
         return Result(events: events, warnings: warnings, lengthInTicks: tick)
     }
 
     // MARK: - Helpers
+
+    /// Grundlautstärke eines Instruments als MIDI-Velocity.
+    ///
+    /// Normalerweise die aus der Datei. Ein `0C` mit gesetztem höchsten Bit
+    /// schreibt aber in die Instrumententabelle selbst
+    ///
+    ///     MOVE.B D0,inst_svol(A4,D1.W)  ;set new svol
+    ///
+    /// und gilt damit für alle späteren Noten des Instruments, nicht nur für
+    /// die eigene Spur. In den sieben vorliegenden Dateien kommt das kein
+    /// einziges Mal vor (22 046 `0C`-Befehle, davon 0 mit gesetztem Bit) —
+    /// abgebildet ist es trotzdem, damit es nicht stillschweigend fehlt.
+    func defaultVolume(of instrument: Instrument, overrides: [Int: UInt8]) -> UInt8 {
+        if let svol = overrides[instrument.number] {
+            return CommandCatalog.midiVolume(ausSvol: svol)
+        }
+        return instrument.initialMIDIVolume
+    }
 
     func instrumentFor(_ number: UInt8) -> Instrument? {
         let index = Int(number) - 1

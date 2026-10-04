@@ -156,3 +156,27 @@ struct SMFReader {
     // Ein Dump zerfaellt in 408 Einzelnachrichten, jede ein eigenes Ereignis.
     #expect(try SMFReader(Data(contentsOf: withSysEx)).sysExCount == 408)
 }
+
+@Test func exportIsReproducible() throws {
+    // Zweimal dasselbe schreiben muss Byte fuer Byte dasselbe ergeben.
+    //
+    // Einschraenkung: Swifts Hash-Seed gilt je **Prozess**. Innerhalb eines
+    // Testlaufs streut die Dictionary-Reihenfolge also nicht, und genau
+    // dieser Test haette den gefundenen Fehler nicht bemerkt. Er sichert nur
+    // die prozessinterne Seite. Die prozessuebergreifende Probe geht ueber
+    // zwei getrennte Laeufe:
+    //
+    //     medprobe --midi a songs/* ; medprobe --midi b songs/* ; diff -r a b
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        var daten: [Data] = []
+        for _ in 0..<2 {
+            let ziel = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("med2midi-\(UUID().uuidString).mid")
+            defer { try? FileManager.default.removeItem(at: ziel) }
+            try MIDIExport.write(song: song, to: ziel)
+            daten.append(try Data(contentsOf: ziel))
+        }
+        #expect(daten[0] == daten[1], "\(url.lastPathComponent)")
+    }
+}

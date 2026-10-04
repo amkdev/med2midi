@@ -361,10 +361,25 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
 }
 
 @Test func svolToMIDI() {
-    // Belegt am undokumentierten InstrExt-Feld der 24-Byte-Variante.
-    #expect(CommandCatalog.midiVolume(ausSvol: 47) == 94)
+    // Dieselbe Skalierung wie bei Befehl 0C, am MIDI-Ausgang gemessen:
+    // C40 in Dezimalanzeige (Wert 40) kam als Velocity 79 an.
+    #expect(CommandCatalog.midiVolume(ausSvol: 40) == 79)
     #expect(CommandCatalog.midiVolume(ausSvol: 64) == 127)
-    #expect(CommandCatalog.midiVolume(ausSvol: 32) == 64)
+    #expect(CommandCatalog.midiVolume(ausSvol: 47) == 93)
+    #expect(CommandCatalog.midiVolume(ausSvol: 32) == 63)
+    #expect(CommandCatalog.midiVolume(ausSvol: 0) == 0)
+}
+
+@Test func storedMIDIVolumeFieldIsNotTheVelocity() throws {
+    // Das undokumentierte Feld der 24-Byte-InstrExt enthaelt svol × 2 und
+    // weicht damit um eins von der gesendeten Velocity ab. Es wird gelesen
+    // und bleibt zugaenglich, aber der Export rechnet aus svol.
+    guard let url = TestFiles.file("N_WOISTDAS_MU80.med") else { return }
+    let song = try MEDLoader.load(file: url)
+    let first = try #require(song.instruments.first)
+    #expect(first.defaultVolume == 47)
+    #expect(first.midiVolume == 94)          // Dateifeld: svol × 2
+    #expect(first.initialMIDIVolume == 93)   // gesendet: ⌊svol × 127/64⌋
 }
 
 @Test func shortFileIsRejected() {
@@ -484,7 +499,7 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
         // Ohne das Feld wird aus svol gerechnet.
         if let bass = song.instruments.first(where: { $0.name == "Bass" }) {
             #expect(bass.defaultVolume == 50)
-            #expect(bass.initialMIDIVolume == 100)
+            #expect(bass.initialMIDIVolume == 99)
         }
     }
     // N_WOISTDAS hat 24 Bytes — das undokumentierte MIDI-Lautstärkefeld ist da.

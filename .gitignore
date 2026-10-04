@@ -1,11 +1,11 @@
-
-__pycache__/
-.build/
 .DS_Store
+.build/
 .swiftpm/
-*.xcuserstate
-# Songdateien werden bewusst nicht versioniert (privates Material)
 DerivedData/
-export/
-songs/
+__pycache__/
+*.xcuserstate
 xcuserdata/
+
+# Privates Material und daraus Abgeleitetes
+songs/
+export/

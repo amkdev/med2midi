@@ -19,7 +19,7 @@ extension Player {
         if let sounding = state.sounding {
             events.append(MIDIEvent(tick: tick, channel: sounding.channel,
                                     kind: .noteOff(note: sounding.note),
-                                    instrument: Int(sounding.instrument)))
+                                    instrument: Int(sounding.instrument), source: location))
         }
 
         let channel = instrument.midiChannel
@@ -31,6 +31,18 @@ extension Player {
         }
 
         let velocity = state.velocity ?? instrument.initialMIDIVolume
+
+        // Velocity 0 sounds nothing. The author's silent `MidiControlChannel_…`
+        // instruments have svol 0 and only exist to give the following
+        // controller commands a channel — their notes must not reach the file,
+        // where they would be indistinguishable from note-offs.
+        guard velocity > 0 else {
+            state.sounding = nil
+            state.holdExpiry = nil
+            tracks[track] = state
+            return
+        }
+
         events.append(MIDIEvent(tick: tick, channel: channel,
                                 kind: .noteOn(note: note, velocity: velocity),
                                 instrument: instrument.number, source: location))
@@ -57,7 +69,9 @@ extension Player {
             events.append(MIDIEvent(tick: max(expiry, sounding.startTick + 1),
                                     channel: sounding.channel,
                                     kind: .noteOff(note: sounding.note),
-                                    instrument: Int(sounding.instrument)))
+                                    instrument: Int(sounding.instrument),
+                                    source: SourceLocation(block: -1, blockname: "",
+                                                           row: 0, track: track, page: 0)))
             tracks[track]?.sounding = nil
             tracks[track]?.holdExpiry = nil
         }

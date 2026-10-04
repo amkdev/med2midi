@@ -15,6 +15,9 @@ struct Options {
     var patternOnly = false
     var exportFolder: String?
     var events = false
+    var midiFolder: String?
+    var layout = MIDIExport.TrackLayout.perInstrument
+    var embedSysEx = false
     var eventLimit = 60
 }
 
@@ -36,6 +39,16 @@ while i < args.count {
     case "--seite":  i += 1; o.page = Int(args[i]) ?? 0
     case "--export": i += 1; o.exportFolder = args[i]
     case "--events": o.events = true
+    case "--midi": i += 1; o.midiFolder = args[i]
+    case "--spuren-nach":
+        i += 1
+        switch args[i] {
+        case "instrument": o.layout = .perInstrument
+        case "kanal":      o.layout = .perChannel
+        case "medspur":    o.layout = .perMEDTrack
+        default: FileHandle.standardError.write("unbekannt: \(args[i])\n".data(using: .utf8)!)
+        }
+    case "--mit-sysex": o.embedSysEx = true
     case "--alle": o.eventLimit = Int.max
     case "--hilfe", "-h":
         print("""
@@ -49,6 +62,10 @@ while i < args.count {
 
         medprobe --events [--alle] <datei> …
           spielt den Song durch und listet die MIDI-Ereignisse
+
+        medprobe --midi <ordner> [--spuren-nach instrument|kanal|medspur]
+                        [--mit-sysex] <datei> …
+          schreibt eine Standard-MIDI-Datei je Song
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -70,6 +87,28 @@ for pfad in o.files {
         song = try MEDLoader.load(file: url)
     } catch {
         print("\(url.lastPathComponent): FEHLER — \(error)")
+        continue
+    }
+
+    if let ordner = o.midiFolder {
+        let basis = (url.lastPathComponent as NSString).deletingPathExtension
+        let ziel = URL(fileURLWithPath: ordner).appendingPathComponent(basis + ".mid")
+        do {
+            try FileManager.default.createDirectory(at: URL(fileURLWithPath: ordner),
+                                                    withIntermediateDirectories: true)
+            var optionen = MIDIExport.Options()
+            optionen.layout = o.layout
+            optionen.embedSysEx = o.embedSysEx
+            let r = try MIDIExport.write(song: song, to: ziel, options: optionen)
+            let größe = (try? Data(contentsOf: ziel).count) ?? 0
+            print("\(url.lastPathComponent) -> \(ziel.lastPathComponent)  "
+                + "\(r.trackCount) Spuren, \(r.eventCount) Ereignisse, "
+                + String(format: "%.1f s, ", r.seconds) + "\(größe) Bytes")
+            for w in r.warnings.prefix(5) { print("   • \(w)") }
+            if r.warnings.count > 5 { print("   … \(r.warnings.count - 5) weitere") }
+        } catch {
+            print("\(url.lastPathComponent): Export fehlgeschlagen — \(error)")
+        }
         continue
     }
 

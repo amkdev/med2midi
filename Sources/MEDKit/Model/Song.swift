@@ -88,6 +88,34 @@ public struct Block: Sendable {
     /// OctaMED zeichnet sie als senkrechten Strich in der Notenspalte. Am
     /// Original gemessen bestimmen sie die Grundlänge der Note; der Hold-Wert
     /// des Instruments kommt in Ticks obendrauf. Siehe `Timing.noteDuration`.
+    /// Ob der Block nur dazu da ist, einen SysEx-Dump abzuschicken.
+    ///
+    /// Der Autor hat seine Songs für die Live-Darbietung so aufbereitet: Das
+    /// erste Pattern sendet den Dump an den MU80 und ist genau so lang, wie
+    /// das Laden dauert. Es enthält keine Note und keinen anderen Befehl als
+    /// `10` (Send SysEx Dump). Mit der Taktart des Songs hat seine Länge
+    /// nichts zu tun.
+    ///
+    /// Das ist Wissen des Autors, nicht aus dem Format ableitbar — die
+    /// Erkennung hängt deshalb an den Daten und nicht an der Position: In
+    /// `final_manchmaltriffteinlächeln2001` steht an erster Stelle ein Block
+    /// mit 93 Noten, also Musik.
+    public var isSysExSendBlock: Bool {
+        var hatSendebefehl = false
+        for row in 0..<rows {
+            for track in 0..<tracks {
+                if cell(row: row, track: track).note != 0 { return false }
+                for page in 0..<pageCount {
+                    let command = command(row: row, track: track, page: page)
+                    guard !command.isEmpty else { continue }
+                    guard command.number == 0x10 else { return false }
+                    hatSendebefehl = true
+                }
+            }
+        }
+        return hatSendebefehl
+    }
+
     public func holdRows(afterRow row: Int, track: Int) -> Int {
         guard row >= 0, row < rows, track >= 0, track < tracks else { return 0 }
         let instrument = cell(row: row, track: track).instrument

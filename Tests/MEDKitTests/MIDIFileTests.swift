@@ -227,7 +227,11 @@ struct SMFReader {
     defer { try? FileManager.default.removeItem(at: ordner) }
 
     let ergebnis = try MIDIExport.writeBlocks(song: song, to: ordner)
-    #expect(ergebnis.count == song.playSequences.first?.blocks.count)
+    // Eine Datei je Eintrag der Songreihenfolge — abzueglich der Sendebloecke,
+    // die beim Abspielen uebersprungen werden.
+    let reihenfolge = NoteAnalysis.songOrder(song)
+    let erwartet = reihenfolge.filter { !song.blocks[$0].isSysExSendBlock }.count
+    #expect(ergebnis.count == erwartet)
     for block in ergebnis {
         let reader = try SMFReader(Data(contentsOf: block.url))
         #expect(reader.format == 1)
@@ -310,4 +314,52 @@ func soundingTime(_ url: URL) throws -> (ticks: Int, hanging: Int) {
     for block in bloecke {
         #expect(try soundingTime(block.url).hanging == 0)
     }
+}
+
+@Test func sysExSendBlocksAreRecognisedFromTheData() throws {
+    // Der Autor hat seine Songs fuer die Live-Darbietung so aufbereitet: Das
+    // erste Pattern schickt den Dump an den MU80 und ist so lang, wie das
+    // Laden dauert. Es ist keine Musik und gehoert nicht in den Export.
+    //
+    // Die Erkennung haengt an den Daten, nicht an der Position: In
+    // final_manchmaltriffteinlächeln2001 steht an erster Stelle ein Block mit
+    // 93 Noten.
+    var gefunden = 0
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        for block in song.blocks where block.isSysExSendBlock {
+            gefunden += 1
+            // Keine Note, und kein anderer Befehl als 10.
+            for row in 0..<block.rows {
+                for track in 0..<block.tracks {
+                    #expect(block.cell(row: row, track: track).note == 0)
+                    for page in 0..<block.pageCount {
+                        let command = block.command(row: row, track: track, page: page)
+                        #expect(command.isEmpty || command.number == 0x10)
+                    }
+                }
+            }
+        }
+    }
+    #expect(gefunden > 0, "kein einziger Sendeblock erkannt")
+}
+
+@Test func skippingTheSendBlockKeepsTheDump() throws {
+    guard let url = TestFiles.file("O_Wie_Eine_Marionette.MMD") else { return }
+    let song = try MEDLoader.load(file: url)
+
+    let mit = Player(song: song, skipSysExBlocks: false).run()
+    let ohne = Player(song: song, skipSysExBlocks: true).run()
+
+    // Der Sendeblock faellt weg, der Song wird genau um seine Laenge kuerzer.
+    let sendeblock = try #require(song.blocks.first { $0.isSysExSendBlock })
+    let ticksProZeile = Player.ppq / song.rowsPerBeat
+    #expect(mit.lengthInTicks - ohne.lengthInTicks == sendeblock.rows * ticksProZeile)
+
+    // Der Dump geht trotzdem hinaus, und jetzt am Songanfang.
+    func dumps(_ r: Player.Result) -> [MIDIEvent] {
+        r.events.filter { if case .sysEx = $0.kind { return true }; return false }
+    }
+    #expect(dumps(mit).count == dumps(ohne).count)
+    #expect(dumps(ohne).allSatisfy { $0.tick == 0 })
 }

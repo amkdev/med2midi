@@ -81,9 +81,16 @@ public struct Player {
     let song: Song
     let order: [Int]
 
-    public init(song: Song) {
+    /// Blöcke überspringen, die nur einen SysEx-Dump abschicken.
+    ///
+    /// Ihre Länge ist die Ladezeit des MU80, nicht Musik. Der Dump selbst
+    /// geht trotzdem hinaus, nur ohne die Wartezeit davor.
+    public var skipSysExBlocks: Bool
+
+    public init(song: Song, skipSysExBlocks: Bool = true) {
         self.song = song
         self.order = NoteAnalysis.songOrder(song)
+        self.skipSysExBlocks = skipSysExBlocks
     }
 
     public func run() -> Result {
@@ -115,6 +122,36 @@ public struct Player {
             guard block.rows > 0 else { continue }
 
             let label = block.name.isEmpty ? "Block \(blockNumber)" : block.name
+
+            // Sendeblock: Dump abschicken, aber keine Zeit verstreichen lassen.
+            if skipSysExBlocks, block.isSysExSendBlock {
+                for row in 0..<block.rows {
+                    for track in 0..<block.tracks {
+                        for page in 0..<block.pageCount {
+                            let command = block.command(row: row, track: track, page: page)
+                            guard command.number == 0x10 else { continue }
+                            let location = SourceLocation(block: blockNumber,
+                                                          blockname: block.name,
+                                                          row: row, track: track, page: page)
+                            let index = Int(command.data)
+                            guard index < song.dumps.count else {
+                                warnings.append("\(location): Befehl 10 verweist auf Dump "
+                                              + "\(index), den es nicht gibt")
+                                continue
+                            }
+                            let dump = song.dumps[index]
+                            events.append(MIDIEvent(tick: tick, channel: nil,
+                                                    kind: .sysEx(dump.rawData), source: location))
+                            events.append(MIDIEvent(tick: tick, channel: nil,
+                                kind: .marker("SysEx: " + (dump.name.isEmpty
+                                                           ? "Dump \(index)" : dump.name)),
+                                source: location))
+                        }
+                    }
+                }
+                continue
+            }
+
             events.append(MIDIEvent(tick: tick, channel: nil, kind: .marker(label)))
             let spanStart = tick
 

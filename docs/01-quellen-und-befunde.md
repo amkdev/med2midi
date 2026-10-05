@@ -512,3 +512,36 @@ Wenige. Nach der Korrektur: 8 in `N_ich_will_neues`, 53 in
 `O_Wie_Eine_Marionette`, sonst 5 bis 22. Der Autor hat weitgehend blockweise
 komponiert. Die zuerst genannten 224 waren Noten, die **genau** auf der
 Blockgrenze enden — also gerade keine Überhänge.
+
+## Sendeblöcke: das erste Pattern ist keine Musik
+
+**Wissen des Autors**, aus dem Format nicht ableitbar. Er hat seine Songs für
+die Live-Darbietung aufbereitet: Das erste Pattern schickt den SysEx-Dump an
+den MU80 und ist genau so lang, wie das Laden dauert. Mit der Taktart hat seine
+Länge nichts zu tun — und es gehört nicht in den Export.
+
+Die Erkennung hängt deshalb an den Daten, nicht an der Position: **keine Note,
+und kein anderer Befehl als `10`** (Send SysEx Dump). Nur so bleibt
+`final_manchmaltriffteinlächeln2001` verschont, wo an erster Stelle ein Block
+mit 93 Noten steht.
+
+| Datei | Sendeblock | Zeilen | Dauer |
+|---|---|---|---|
+| `O_Wie_Eine_Marionette.MMD` | ja | 128 | 6,5 s |
+| `N_ich_will_neues.mmd1` | ja | 78 | 6,4 s |
+| `sehnsuchts_blues.MMD1.pp` | ja | 55 | 6,3 s |
+| `unsere_hände_spielen.MMD` | ja | 64 | 6,4 s |
+| `N_WOISTDAS_MU80.med` | nein | — | — |
+| `final_soverloren.med` | nein | — | — |
+| `final_manchmaltriffteinlächeln2001.med` | nein | — | — |
+
+Die vier erkannten Blöcke dauern alle rund **6,4 Sekunden**, bei sehr
+verschiedenen Zeilenzahlen und Tempi. Das ist die Ladezeit des MU80 und
+bestätigt die Schilderung unabhängig.
+
+`Player.skipSysExBlocks` ist voreingestellt. Der Dump geht weiter hinaus, nur
+ohne die Wartezeit davor — er steht dann auf Tick 0.
+
+Die drei Dateien ohne Sendeblock lösen ihren Dump überhaupt nicht aus; er liegt
+nur gespeichert in der Datei. Für sie gibt es beim Einbetten
+`sendStoredDumpsAtStart`.

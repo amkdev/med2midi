@@ -211,3 +211,49 @@ Der Schaden steckt in der Originaldatei, nicht im Export.
 
 Der Test hält den Befund fest: Bricht er, ist entweder der Schaden repariert
 worden oder ein neuer dazugekommen.
+
+## Fünf gekippte Bits — am Gerät bestätigt und repariert
+
+Der Autor hat den MU80-Dump von `2_ENDZEIT_NEW.OMP_WS+MU` an das Gerät
+geschickt. Antwort: **„Check Sum Error!"**
+
+Die Prüfung aller 407 Nachrichten fand fünf beschädigte Bytes:
+
+| Offset | ist | soll | Art |
+|---|---|---|---|
+| 1717 | `00` | `40` | Datenbyte, Multi Part `08 0B 30` |
+| 5224 | `F1` | `F7` | Endbyte — zwei Nachrichten hingen zusammen |
+| 6824 | `70` | `F0` | Startbyte |
+| 10145 | `00` | `40` | Datenbyte, Drum Setup `32 3D 00` |
+| 11744 | `00` | `40` | Datenbyte, Drum Setup `33 28 00` |
+
+### Wie jede einzelne Reparatur bewiesen ist
+
+**Rahmenbytes** (`F0`, `F7`): Eine SysEx-Nachricht kann nicht anders beginnen
+oder enden. Der Beweis liegt im Ergebnis — nach der Korrektur erfüllt die
+Nachricht Byteanzahl **und** Prüfsumme, und der Dump hat 408 Nachrichten statt
+407, also genau so viele wie jeder intakte Dump des Autors.
+
+**Datenbytes:** Hier war zunächst offen, ob das Datenbyte oder das
+Prüfsummenbyte beschädigt ist — von innen nicht zu unterscheiden, beide
+erzeugen dieselbe Abweichung. Entschieden hat der Vergleich mit den
+Geschwistern: Die vier Drum-Setups (`30`–`33`) und die 32 Parts sind parallel
+aufgebaut. An jeder der drei Stellen weicht **genau ein** Byte von **allen**
+Geschwistern ab, und zwar um exakt Bit 6 — es steht `00`, wo überall sonst `40`
+steht. Setzt man das Bit zurück, stimmt die **gespeicherte** Prüfsumme wieder.
+
+Damit ist auch gesagt, was nicht beschädigt war: die Prüfsummen.
+
+### Was `SysExRepair` nicht tut
+
+Geraten wird nichts. Eine Reparatur braucht mindestens drei Geschwister, ein
+eindeutiges abweichendes Byte und eine Abweichung, welche die
+Prüfsummendifferenz **exakt** erklärt. Fehlt eines davon, bleibt das Byte
+stehen und die Beanstandung steht im Manifest unter „Offen".
+
+An heilen Dumps ändert sich nichts — über alle Dateien geprüft. Dumps anderer
+Hersteller bleiben unberührt, dort gilt das Schema nicht.
+
+Die Originaldateien werden nie verändert; MEDKit hat keinen Schreibpfad auf
+sie. Die Korrektur steckt nur in der exportierten `.syx`, und `dumps.txt` nennt
+jedes geänderte Byte mit Offset, altem und neuem Wert und Begründung.

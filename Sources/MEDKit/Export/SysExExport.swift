@@ -24,6 +24,10 @@ public enum SysExExport {
         public let complete: Bool
         /// Ergebnis der Nachrichtenprüfung (Byteanzahl und Prüfsumme je Nachricht).
         public let check: SysExDump.Check
+        /// Bytes, die beim Schreiben beweisbar repariert wurden.
+        public let repairs: [SysExRepair.Change]
+        /// Beanstandungen, die sich nicht beweisbar beheben ließen.
+        public let unresolved: [String]
         /// Wird der Dump im Songverlauf per Befehl `10` ausgelöst?
         public let triggeredAt: SourceLocation?
     }
@@ -46,19 +50,29 @@ public enum SysExExport {
         for dump in song.dumps {
             let base = fileNameBase(song: song, dump: dump)
             let url = folder.appendingPathComponent(base + ".syx")
-            try Data(dump.rawData).write(to: url)
+
+            // Beweisbar beschädigte Bytes richtigstellen. Die Originaldatei
+            // bleibt unberührt; die `.syx` ist zum Senden gedacht, und ein
+            // Gerät lehnt eine kaputte Nachricht ab. Jede Änderung steht im
+            // Manifest, geraten wird nichts.
+            let repariert = SysExRepair.repair(dump)
+            try Data(repariert.data).write(to: url)
+            let geschrieben = SysExDump(index: dump.index, name: dump.name,
+                                        rawData: repariert.data)
 
             infos.append(DumpInfo(
                 index: dump.index,
                 name: dump.name,
                 fileName: url.lastPathComponent,
-                byteCount: dump.rawData.count,
-                messageCount: dump.messages.count,
-                hash: shortHash(dump.rawData),
-                manufacturer: dump.manufacturer,
-                modelIDs: modelIDs(of: dump),
-                complete: dump.isComplete,
-                check: dump.check(),
+                byteCount: geschrieben.rawData.count,
+                messageCount: geschrieben.messages.count,
+                hash: shortHash(geschrieben.rawData),
+                manufacturer: geschrieben.manufacturer,
+                modelIDs: modelIDs(of: geschrieben),
+                complete: geschrieben.isComplete,
+                check: geschrieben.check(),
+                repairs: repariert.changes,
+                unresolved: repariert.unresolved,
                 triggeredAt: triggers[dump.index]))
         }
 
@@ -71,6 +85,34 @@ public enum SysExExport {
 
     /// Model-IDs, die in den Nachrichten eines Dumps vorkommen.
     /// Yamaha legt sie auf Byte 3: `F0 43 0n <model> …`
+    /// Was an einem Dump repariert wurde, für das Manifest.
+    ///
+    /// Steht ausführlich da, weil es eine Änderung an den Daten des Autors ist
+    /// — wenn auch nur in der Ausgabedatei. Wer sie nachvollziehen will, soll
+    /// jedes Byte wiederfinden.
+    static func reparaturText(_ d: DumpInfo) -> String {
+        guard !d.repairs.isEmpty || !d.unresolved.isEmpty else { return "" }
+        var zeilen = [""]
+        if !d.repairs.isEmpty {
+            zeilen.append("     Repariert  : \(d.repairs.count) beschädigte Bytes. Die "
+                        + "Originaldatei bleibt unberührt;")
+            zeilen.append("                  diese .syx trägt die Korrektur, damit das Gerät "
+                        + "sie annimmt.")
+            for c in d.repairs {
+                zeilen.append(String(format: "                  Offset %6d: %02X → %02X",
+                                     c.offset, c.from, c.to))
+                zeilen.append("                      \(c.reason)")
+            }
+        }
+        if !d.unresolved.isEmpty {
+            zeilen.append("     Offen      : \(d.unresolved.count) Beanstandungen ohne "
+                        + "beweisbare Reparatur —")
+            zeilen.append("                  unverändert gelassen.")
+            for u in d.unresolved.prefix(10) { zeilen.append("                  \(u)") }
+        }
+        return zeilen.joined(separator: "\n")
+    }
+
     static func modelIDs(of dump: SysExDump) -> [UInt8] {
         var seen: [UInt8] = []
         for message in dump.messages where message.count > 3 {
@@ -153,11 +195,7 @@ public enum SysExExport {
             \(d.manufacturer == 0x43 ? " (Yamaha)" : "")
                  Model-IDs  : \(model)
                  Form       : \(d.complete ? "F0 … F7 vollständig" : "UNVOLLSTÄNDIG")
-                 Prüfung    : \(d.check.isIntact
-                     ? "alle \(d.check.messages) Nachrichten fehlerfrei (Byteanzahl und Prüfsumme)"
-                     : "Byteanzahl \(d.check.countsValid)/\(d.check.messages), "
-                       + "Prüfsumme \(d.check.checksumsValid)/\(d.check.messages), "
-                       + "\(d.check.trailingBytes) Restbytes")
+                 Prüfung    : \(d.check.text)\(reparaturText(d))
                  Status     : \(status)
 
 

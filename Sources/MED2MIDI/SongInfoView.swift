@@ -39,7 +39,12 @@ struct SongInfoView: View {
                             FlowLayout(spacing: 4) {
                                 ForEach(Array(p.blocks.enumerated()), id: \.offset) { j, nr in
                                     Button {
-                                        store.position.sequencePosition = j
+                                        // Nur zum Block springen. Der Index `j`
+                                        // zählt innerhalb dieser Playsequenz und
+                                        // ist bei MMD2/MMD3 nicht die Position in
+                                        // der zusammengesetzten Songreihenfolge.
+                                        // Dafür gibt es die Liste in der
+                                        // Seitenleiste.
                                         store.goToBlock(nr)
                                     } label: {
                                         Text("\(nr)")

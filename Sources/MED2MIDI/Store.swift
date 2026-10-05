@@ -195,6 +195,20 @@ final class Store {
         position.page = 0
     }
 
+    /// Springt an eine bestimmte Stelle der Songreihenfolge.
+    ///
+    /// Nicht über `goToBlock(_:)`: Derselbe Block kommt mehrfach vor, und das
+    /// würde immer beim ersten Vorkommen landen. In `N_ich_will_neues` steht
+    /// Block 7 an zwei Stellen.
+    func goToSequencePosition(_ position: Int) {
+        let order = songOrder
+        guard position >= 0, position < order.count else { return }
+        self.position.sequencePosition = position
+        self.position.block = order[position]
+        self.position.row = 0
+        self.position.page = 0
+    }
+
     func goToBlock(_ number: Int) {
         guard let s = current?.song, number >= 0, number < s.blocks.count else { return }
         position.block = number

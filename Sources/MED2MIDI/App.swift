@@ -77,7 +77,80 @@ struct MainView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Seitenleiste: oben die geladenen Songs, darunter die Spielsequenz —
+    /// wie OctaMEDs gleichnamiges Fenster, nur fest eingebaut.
     private var sidebar: some View {
+        VSplitView {
+            songList
+                .frame(minHeight: 80, idealHeight: 150)
+            sequenceList
+                .frame(minHeight: 140)
+        }
+        .navigationSplitViewColumnWidth(min: 210, ideal: 250)
+    }
+
+    /// Die Spielsequenz, wie OctaMED sie zeigt: laufende Nummer, Blocknummer,
+    /// Blockname. Derselbe Block kann mehrfach vorkommen — die Position ist
+    /// das, was zählt.
+    private var sequenceList: some View {
+        let order = store.songOrder
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Spielsequenz").font(.caption.bold()).foregroundStyle(.secondary)
+                Spacer()
+                Text("\(order.count)").font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+
+            Divider()
+
+            ScrollViewReader { leser in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(order.enumerated()), id: \.offset) { position, block in
+                            sequenceRow(position: position, block: block)
+                                .id(position)
+                        }
+                    }
+                }
+                .onChange(of: store.position.sequencePosition) { _, neu in
+                    withAnimation(.easeOut(duration: 0.15)) { leser.scrollTo(neu, anchor: .center) }
+                }
+            }
+        }
+    }
+
+    private func sequenceRow(position: Int, block: Int) -> some View {
+        let song = store.current?.song
+        let b = song.flatMap { block < $0.blocks.count ? $0.blocks[block] : nil }
+        let aktuell = position == store.position.sequencePosition
+        let sendeblock = b?.isSysExSendBlock == true
+        return HStack(spacing: 6) {
+            Text(String(format: "%03d", position + 1))
+                .foregroundStyle(aktuell ? .primary : .tertiary)
+            Text(String(format: "%03d:", block))
+                .foregroundStyle(aktuell ? .primary : .secondary)
+            Text(b.map { $0.name.isEmpty ? "—" : $0.name } ?? "fehlt")
+                .foregroundStyle(sendeblock ? .secondary : .primary)
+                .italic(sendeblock)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if sendeblock {
+                Image(systemName: "paperplane")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .help("Sendeblock: schickt nur den SysEx-Dump, keine Musik")
+            }
+        }
+        .font(.system(size: 11, design: .monospaced))
+        .padding(.horizontal, 10).padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(aktuell ? Color.accentColor.opacity(0.3) : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { store.goToSequencePosition(position) }
+    }
+
+    private var songList: some View {
         @Bindable var store = store
         return List(selection: $store.selection) {
             ForEach(store.songs) { g in
@@ -101,7 +174,6 @@ struct MainView: View {
                 }
             }
         }
-        .navigationSplitViewColumnWidth(min: 190, ideal: 230)
         .onChange(of: store.selection) { _, _ in store.goToSongStart() }
         .sheet(item: $store.exportReport) { bericht in
             VStack(alignment: .leading, spacing: 14) {

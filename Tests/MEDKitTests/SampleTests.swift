@@ -61,11 +61,18 @@ import Foundation
 }
 
 @Test func samplePlaybackRateComesFromOctaMEDsOwnTable() {
-    // per0: DC.W 856,808,762,… — 856 ist C-3, C-5 also 214.
-    // Paulas PAL-Takt geteilt durch die Periode ergibt die Rate.
+    // Die Tabelle beginnt bei per0 mit 856, und das ist MED-Note 1 — die
+    // beiden Zeilen darueber werden nur fuer mehroktavige IFF-Instrumente
+    // assembliert. MED-Note 25 (C-3) hat damit die Periode 214.
+    #expect(SampleExport.referenceMEDNote == 25)
     #expect(SampleExport.referenceRate == 16574)
-    #expect(Int((SampleExport.palClock / 856.0).rounded()) == 4144)   // C-3
-    #expect(Int((SampleExport.palClock / 428.0).rounded()) == 8287)   // C-4
+    #expect(Int((SampleExport.palClock / 856.0).rounded()) == 4144)   // MED-Note 1
+    #expect(Int((SampleExport.palClock / 428.0).rounded()) == 8287)   // MED-Note 13
+
+    // Am Original bestaetigt: In Bitwig klingt das Sample mit Grundton C0
+    // richtig. C0 ist dort die MIDI-Note 24.
+    #expect(SampleExport.referenceMEDNote + Player.noteOffset == 24)
+    #expect(MIDINote.name(24) == "C0")
 }
 
 @Test func sampleInstrumentsGetNotesInTheExport() throws {
@@ -137,5 +144,5 @@ import Foundation
     }
     let text = try String(contentsOf: ordner.appendingPathComponent("samples.txt"),
                           encoding: .utf8)
-    #expect(text.contains("48 C2"))
+    #expect(text.contains("24 C0"))
 }

@@ -41,21 +41,48 @@ sie als „1 ch, 16574 Hz, Int16".
 ## Abspielrate und Grundton
 
 Ein Amiga-Sample hat keine eigene Rate. Was herauskommt, hängt von der
-Paula-Periode ab, und die steht in OctaMEDs Tabelle:
+Paula-Periode ab, und die steht in OctaMEDs Tabelle. Entscheidend ist, wo sie
+**beginnt**:
 
+    IFNE SYNTH|IFFMOCT
+        DC.W 3424,3232,…        ; nur für mehroktavige IFF-Instrumente
+        DC.W 1712,1616,…
+    ENDC
     per0: DC.W 856,808,762,720,678,640,604,570,538,508,480,453
+          DC.W 428,404,381,360,339,320,302,285,269,254,240,226
+          DC.W 214,202,190,180,170,160,151,143,135,127,120,113
+          DC.W 214,202,190,…      ; ab hier wiederholt sich die Zeile
+          DC.W 214,202,190,…
+          DC.W 214,202,190,…
 
-`856` ist `C-3`, jede Oktave darüber halbiert. Die Rate ist Paulas PAL-Takt
-geteilt durch die Periode:
+Die beiden Zeilen über `per0` werden nur bedingt assembliert. Die normale
+Tabelle fängt bei `per0` an, und `856` gehört damit zu **MED-Note 1**:
 
-| MED-Note | Periode | Rate |
-|---|---|---|
-| `C-3` | 856 | 4 144 Hz |
-| `C-4` | 428 | 8 287 Hz |
-| `C-5` | 214 | **16 574 Hz** |
+| MED-Note | Name in OctaMED | Periode | Rate |
+|---|---|---|---|
+| 1 | `C-1` | 856 | 4 144 Hz |
+| 13 | `C-2` | 428 | 8 287 Hz |
+| 25 | `C-3` | 214 | **16 574 Hz** |
 
-Geschrieben wird mit der Rate für `C-5` und dem passenden Grundton. `C-3`
-ginge auch, aber 4 kHz sieht in mancher DAW nach einem Fehler aus.
+Geschrieben wird mit der Rate für MED-Note 25 und dem Grundton **MIDI 24**,
+also `C0`.
+
+### Am Original bestätigt — und vorher falsch
+
+Eine erste Fassung hielt `856` für `C-3` und nannte als Grundton `C2`. Der
+Autor hat das Sample in Bitwig geladen und ausprobiert: Richtig klingt es mit
+`C0`. Das sind genau zwei Oktaven Unterschied — und es ist genau der Betrag,
+um den die Tabelle falsch eingeordnet war.
+
+Die Messung an der Sache schlägt das Lesen des Quelltextes. Hier hat sie ihn
+berichtigt.
+
+### Die Obergrenze
+
+Ab der vierten Zeile wiederholt sich die Tabelle. Oberhalb von **MED-Note 36**
+steigt die Tonhöhe auf dem Amiga also nicht weiter — Paula kann nicht
+schneller. Im Material des Autors kommt keine Sample-Note über 36 vor, geprüft
+über alle Blöcke; die Grenze spielt hier keine Rolle.
 
 **Grundton** steht als MIDI-Notennummer **und** als Notenname. Die Nummer ist
 eindeutig, der Name hängt von der Zählung ab: Mitte C (Note 60) heißt mal `C3`,

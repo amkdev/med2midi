@@ -318,7 +318,6 @@ struct MainView: View {
             Spacer()
 
             positionDisplay
-            Toggle("Farben", isOn: $store.colourTracks).toggleStyle(.switch)
 
             Divider().frame(height: 18)
             exportButton

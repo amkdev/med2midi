@@ -195,8 +195,7 @@ struct PatternView: View {
     ]
 
     private func instrumentColour(_ number: UInt8) -> Color {
-        guard store.colourTracks else { return Color(nsColor: .lightGray) }
-        return Self.palette[Int(number) % Self.palette.count]
+        Self.palette[Int(number) % Self.palette.count]
     }
 
     /// Befehle nach Wirkung einfärben — Lautstärke, Tonhöhe, Struktur, Rest.

@@ -26,9 +26,6 @@ final class Store {
     var selection: Set<LoadedSong.ID> = []
     var position = Position()
     var errorMessage: String?
-    /// Nach Instrument einfärben (Projekt-Prompt, Punkt 2).
-    var colourTracks = true
-
     // MARK: - Export
 
     /// Läuft gerade ein Export?

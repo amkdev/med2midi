@@ -602,3 +602,34 @@ Aufnehmen gibt es die Engstelle nicht, dort ist die exakte besser. Erst beim
 Abspielen des ganzen Songs über eine DIN-Leitung lohnt die Verschiebung.
 
 `--midi` und `--entzerrt` sind entfallen; beides steckt in `--export`.
+
+## Taktart: eine Eingrenzung, keine Antwort
+
+Ein Tracker speichert keine Taktart. OctaMED kennt nur Zeilen je Beat (LPB)
+und die Länge eines Blocks; den Takt hat der Autor über diese beiden Größen und
+den Notenversatz ausgedrückt — die Information steht nicht in der Datei.
+
+`MeterEstimate` grenzt ein: Eine Taktlänge von `n` Vierteln kommt in Frage,
+wenn **jede** vorkommende Blocklänge ein ganzes Vielfaches von `n × LPB` Zeilen
+ist. Sendeblöcke bleiben außen vor, ihre Länge ist die Ladezeit des MU80.
+
+| Datei | LPB | Blöcke in Vierteln | Ergebnis |
+|---|---|---|---|
+| `N_ich_will_neues.mmd1` | 8 | 6, 12, 24 | 2/4, 3/4, 6/4 |
+| `sehnsuchts_blues.MMD1.pp` | 8 | 6, 12, 24 | 2/4, 3/4, 6/4 |
+| `N_WOISTDAS_MU80.med` | 8 | 8, 16, 24, 32 | 2/4, 4/4 |
+| `final_soverloren.med` | 4 | 8, 16, 32 | 2/4, 4/4 |
+| `final_manchmaltriffteinlächeln2001.med` | 4 | 16, 24, 32, 64 | 2/4, 4/4 |
+| `O_Wie_Eine_Marionette.MMD` | 15 | 8,53 … | nicht eingrenzbar |
+| `unsere_hände_spielen.MMD` | 6 | 10,67 … | nicht eingrenzbar |
+
+Mehr ist daraus nicht zu holen, und die Anzeige sagt das auch so. Ein Versuch,
+die Taktlänge aus der Lage der Schlagzeugnoten zu bestimmen, blieb ohne
+belastbares Ergebnis: Die Kandidaten lagen dicht beieinander, und jeder Block
+beginnt bei Zeile 0, was jeden Kandidaten gleichermaßen begünstigt. Nur bei
+`O_Wie_Eine_Marionette` stach 4/4 heraus — bei einer Datei, deren Blocklängen
+nicht einmal ganze Viertel ergeben.
+
+Die Taktart wird deshalb **nicht** in die MIDI-Datei geschrieben. Eine geratene
+Taktart ist schlechter als keine: Ohne `FF 58` nimmt die DAW 4/4 an, und das
+ist eine erkennbare Annahme statt einer falschen Angabe.

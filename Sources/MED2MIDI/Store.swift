@@ -27,6 +27,102 @@ final class Store {
     /// Nach Instrument einfärben (Projekt-Prompt, Punkt 2).
     var colourTracks = true
 
+    // MARK: - Export
+
+    /// Läuft gerade ein Export?
+    var exporting = false
+    /// Ergebnis des letzten Exports, für die Meldung.
+    var exportReport: ExportReport?
+
+    struct ExportReport: Identifiable {
+        let id = UUID()
+        let folder: URL
+        let lines: [String]
+        let failed: Bool
+    }
+
+    /// Zuletzt gewählter Zielordner, über Programmstarts hinweg.
+    ///
+    /// Als Lesezeichen abgelegt, nicht als Pfad: Ein Pfad bricht, sobald der
+    /// Ordner umbenannt oder verschoben wird, das Lesezeichen folgt ihm.
+    private static let bookmarkKey = "exportFolderBookmark"
+
+    var exportFolder: URL? {
+        guard let data = UserDefaults.standard.data(forKey: Self.bookmarkKey) else { return nil }
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope],
+                                 relativeTo: nil, bookmarkDataIsStale: &stale)
+        else { return nil }
+        if stale { remember(url) }
+        return url
+    }
+
+    private func remember(_ url: URL) {
+        guard let data = try? url.bookmarkData(options: [.withSecurityScope],
+                                               includingResourceValuesForKeys: nil,
+                                               relativeTo: nil) else { return }
+        UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
+    }
+
+    /// Fragt nach dem Zielordner, wenn noch keiner gemerkt ist, und exportiert.
+    func exportCurrent(askForFolder: Bool = false) {
+        guard let loaded = current else { return }
+        var ziel = askForFolder ? nil : exportFolder
+        if ziel == nil {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.canCreateDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.prompt = "Hierhin exportieren"
+            panel.message = "Zielordner für den Export wählen. "
+                          + "Je Song entsteht darin ein eigener Ordner."
+            panel.directoryURL = exportFolder
+            guard panel.runModal() == .OK, let gewaehlt = panel.url else { return }
+            remember(gewaehlt)
+            ziel = gewaehlt
+        }
+        guard let ordner = ziel else { return }
+        export(loaded, to: ordner)
+    }
+
+    private func export(_ loaded: LoadedSong, to ordner: URL) {
+        exporting = true
+        let braucht = ordner.startAccessingSecurityScopedResource()
+        defer { if braucht { ordner.stopAccessingSecurityScopedResource() } }
+        do {
+            let r = try Export.writeAll(song: loaded.song, to: ordner)
+            var lines: [String] = []
+            func groesse(_ u: URL) -> String {
+                let n = (try? Data(contentsOf: u).count) ?? 0
+                return n > 1_000_000 ? String(format: "%.1f MB", Double(n) / 1e6)
+                                     : "\(n / 1000) kB"
+            }
+            lines.append("\(r.midi.url.lastPathComponent) — \(r.midi.trackCount) Spuren, "
+                         + String(format: "%.1f s, ", r.midi.seconds) + groesse(r.midi.url))
+            lines.append("\(r.relieved.url.lastPathComponent) — entzerrte Fassung, "
+                         + groesse(r.relieved.url))
+            if let sysEx = r.sysEx {
+                lines.append("sysex/ — \(sysEx.dumps.count) Dumps, dumps.txt, parts.txt")
+            } else {
+                lines.append("Kein SysEx-Dump in dieser Datei.")
+            }
+            if !r.midi.warnings.isEmpty {
+                lines.append("")
+                lines.append("\(r.midi.warnings.count) Hinweise:")
+                lines.append(contentsOf: r.midi.warnings.prefix(6).map { "• " + $0 })
+                if r.midi.warnings.count > 6 {
+                    lines.append("… \(r.midi.warnings.count - 6) weitere")
+                }
+            }
+            exportReport = ExportReport(folder: r.folder, lines: lines, failed: false)
+        } catch {
+            exportReport = ExportReport(folder: ordner,
+                                        lines: ["\(error)"], failed: true)
+        }
+        exporting = false
+    }
+
     var current: LoadedSong? {
         songs.first { $0.id == selection } ?? songs.first
     }

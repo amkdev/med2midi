@@ -25,6 +25,7 @@ struct SongInfoView: View {
                     row("Zeilen pro Beat", "\(song.rowsPerBeat)")
                     row("Transponierung", "\(song.songTranspose)")
                     row("Mixing-Modus", song.mixingMode ? "ja" : "nein")
+                    taktSchaetzung
                 }
                 section("Struktur") {
                     row("Blöcke", "\(song.blocks.count)")
@@ -198,6 +199,27 @@ struct SongInfoView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 8))
+    }
+
+    /// Grobe Eingrenzung der Taktart.
+    ///
+    /// Ein Tracker speichert keine Taktart — OctaMED kennt nur Zeilen je Beat
+    /// und Blocklängen. Mehr als eine Eingrenzung ist daraus nicht zu holen,
+    /// und das steht hier auch so.
+    private var taktSchaetzung: some View {
+        let takt = MeterEstimate.estimate(song: song)
+        return VStack(alignment: .leading, spacing: 3) {
+            row("Taktart", takt.text)
+            HStack(alignment: .top, spacing: 8) {
+                Text("").frame(width: 130)
+                Text("Blöcke zu \(takt.quarters.joined(separator: ", ")) Vierteln. "
+                     + "Die Datei enthält keine Taktart; das hier ist aus den "
+                     + "Blocklängen geschlossen und grenzt nur ein.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func row(_ name: String, _ value: String) -> some View {

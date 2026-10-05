@@ -63,3 +63,37 @@ import Foundation
     }
     #expect(text.contains("Parts übereinander"))
 }
+
+@Test func meterEstimateNarrowsWhereItCan() throws {
+    // Ein Tracker speichert keine Taktart. Die Schaetzung grenzt ein, und wo
+    // sie das nicht kann, sagt sie es — statt eine Zahl zu erfinden.
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        let takt = MeterEstimate.estimate(song: song)
+
+        #expect(!takt.blockRows.isEmpty, "\(url.lastPathComponent): keine Bloecke")
+        #expect(takt.rowsPerBeat > 0)
+        // Jeder Kandidat muss wirklich zu allen Bloecken passen.
+        for kandidat in takt.candidates {
+            for rows in takt.blockRows {
+                let befund = "\(url.lastPathComponent): \(kandidat)/4 passt nicht zu \(rows) Zeilen"
+                #expect(rows % (kandidat * takt.rowsPerBeat) == 0, "\(befund)")
+            }
+        }
+        // Ohne ganze Viertel darf es keine Kandidaten geben.
+        if !takt.wholeBeats { #expect(takt.candidates.isEmpty) }
+        #expect(!takt.text.isEmpty)
+    }
+}
+
+@Test func sendBlocksDoNotDistortTheMeterEstimate() throws {
+    // Die Laenge eines Sendeblocks ist die Ladezeit des MU80. Zaehlte sie mit,
+    // waere die Schaetzung wertlos: In N_ich_will_neues hat er 78 Zeilen und
+    // teilt sich durch nichts.
+    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let song = try MEDLoader.load(file: url)
+    let takt = MeterEstimate.estimate(song: song)
+    #expect(!takt.blockRows.contains(78))
+    #expect(takt.blockRows == [48, 96, 192])
+    #expect(takt.candidates == [2, 3, 6])
+}

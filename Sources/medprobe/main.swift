@@ -149,6 +149,9 @@ for pfad in o.files {
     let pages = song.blocks.reduce(0) { $0 + $1.extraPages.count }
     print("  Spurbreiten   : \(widths)   \(totalRows) Zeilen gesamt"
         + "   Zusatzseiten: \(pages)")
+    let takt = MeterEstimate.estimate(song: song)
+    print("  Taktschätzung : Blöcke zu \(takt.quarters.joined(separator: ", ")) Vierteln"
+        + "   \(takt.text)")
     print("  Tempo         : \(song.defaultTempo)"
         + "\(song.bpmMode ? " BPM" : "")   Ticks/Zeile: \(song.ticksPerRow)"
         + "   Zeilen/Beat: \(song.rowsPerBeat)")

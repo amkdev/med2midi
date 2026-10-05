@@ -103,6 +103,46 @@ struct MainView: View {
         }
         .navigationSplitViewColumnWidth(min: 190, ideal: 230)
         .onChange(of: store.selection) { _, _ in store.goToSongStart() }
+        .sheet(item: $store.exportReport) { bericht in
+            VStack(alignment: .leading, spacing: 14) {
+                Label(bericht.failed ? "Export fehlgeschlagen" : "Export abgeschlossen",
+                      systemImage: bericht.failed ? "exclamationmark.triangle" : "checkmark.circle")
+                    .font(.headline)
+                    .foregroundStyle(bericht.failed ? Color.orange : Color.green)
+
+                Text(bericht.folder.path)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                Divider()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(bericht.lines.enumerated()), id: \.offset) { _, zeile in
+                            Text(zeile)
+                                .font(.system(size: 11, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+
+                HStack {
+                    if !bericht.failed {
+                        Button("Im Finder zeigen") {
+                            NSWorkspace.shared.activateFileViewerSelecting([bericht.folder])
+                        }
+                    }
+                    Spacer()
+                    Button("Fertig") { store.exportReport = nil }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(20)
+            .frame(width: 560)
+        }
     }
 
     private func toolbar(_ song: Song) -> some View {
@@ -144,10 +184,45 @@ struct MainView: View {
 
             positionDisplay
             Toggle("Farben", isOn: $store.colourTracks).toggleStyle(.switch)
+
+            Divider().frame(height: 18)
+            exportButton
         }
         .padding(.horizontal, 12).padding(.vertical, 7)
         .onChange(of: store.position.block) { _, neu in blockInput = "\(neu)" }
         .onAppear { blockInput = "\(store.position.block)" }
+    }
+
+    /// Export mit gemerktem Zielordner. Der Pfeil daneben wählt einen neuen.
+    private var exportButton: some View {
+        HStack(spacing: 2) {
+            Button {
+                store.exportCurrent()
+            } label: {
+                if store.exporting {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Exportieren", systemImage: "square.and.arrow.up")
+                }
+            }
+            .disabled(store.exporting)
+            .help(store.exportFolder.map { "Exportiert nach \($0.path)" }
+                  ?? "Zielordner wählen und exportieren")
+
+            Menu {
+                Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
+                if let ordner = store.exportFolder {
+                    Divider()
+                    Text(ordner.path)
+                    Button("Im Finder zeigen") {
+                        NSWorkspace.shared.activateFileViewerSelecting([ordner])
+                    }
+                }
+            } label: { EmptyView() }
+            .menuStyle(.borderlessButton)
+            .frame(width: 14)
+            .disabled(store.exporting)
+        }
     }
 
     private var positionDisplay: some View {

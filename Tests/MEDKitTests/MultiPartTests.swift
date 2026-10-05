@@ -114,3 +114,26 @@ import Foundation
     // ohne Aussage.
     #expect(endungen.count > 1, "nur eine Endung im Material: \(endungen)")
 }
+
+@Test func folderScanFindsFilesWithoutExtensionAndSkipsOthers() throws {
+    // Nachgestellt, was beim Ablegen eines Archivordners passiert: verschachtelte
+    // Ordner, eine MED-Datei ohne jede Endung, und Dateien, die keine sind.
+    guard let quelle = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let wurzel = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("med2midi-scan-\(UUID().uuidString)")
+    let unter = wurzel.appendingPathComponent("tiefer/noch tiefer")
+    defer { try? FileManager.default.removeItem(at: wurzel) }
+    try FileManager.default.createDirectory(at: unter, withIntermediateDirectories: true)
+
+    try Data(contentsOf: quelle).write(to: unter.appendingPathComponent("ohne_endung"))
+    try Data("kein MED".utf8).write(to: wurzel.appendingPathComponent("liesmich.txt"))
+    try Data([0x4D, 0x4D]).write(to: wurzel.appendingPathComponent("zu_kurz"))
+
+    let gefunden = MEDFileScan.medFiles(at: wurzel)
+    #expect(gefunden.count == 1, "\(gefunden.map(\.lastPathComponent))")
+    #expect(gefunden.first?.lastPathComponent == "ohne_endung")
+
+    // Eine einzelne Datei direkt, nicht nur Ordner.
+    #expect(MEDFileScan.medFiles(at: quelle).count == 1)
+    #expect(MEDFileScan.medFiles(at: wurzel.appendingPathComponent("liesmich.txt")).isEmpty)
+}

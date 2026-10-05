@@ -185,7 +185,37 @@ final class Store {
 
     // MARK: - Laden
 
+    /// Läuft gerade eine Ordnersuche?
+    var scanning = false
+
+    /// Nimmt entgegen, was aus dem Öffnen-Dialog oder vom Ablegen kommt:
+    /// Dateien **und** Ordner, in beliebiger Mischung.
+    ///
+    /// Die Suche läuft neben dem Hauptthread. Ein Archivordner kann tausende
+    /// Dateien enthalten, und von jeder werden vier Bytes gelesen — das
+    /// soll das Fenster nicht anhalten.
+    func accept(_ urls: [URL]) {
+        let roots = urls.filter(\.isFileURL)
+        guard !roots.isEmpty else { return }
+        scanning = true
+        Task {
+            let gefunden = await Task.detached(priority: .userInitiated) {
+                roots.flatMap { MEDFileScan.medFiles(at: $0) }
+            }.value
+            scanning = false
+            guard !gefunden.isEmpty else {
+                errorMessage = roots.count == 1 && roots[0].hasDirectoryPath
+                    ? "In „\(roots[0].lastPathComponent)“ liegt keine MED-Datei. "
+                    + "Gesucht wird nach der Kennung am Dateianfang, nicht nach der Endung."
+                    : "Keine MED-Datei dabei."
+                return
+            }
+            load(gefunden)
+        }
+    }
+
     func load(_ urls: [URL]) {
+        var fehler: [String] = []
         for url in urls {
             let braucht = url.startAccessingSecurityScopedResource()
             defer { if braucht { url.stopAccessingSecurityScopedResource() } }
@@ -197,8 +227,17 @@ final class Store {
                     goToSongStart()
                 }
             } catch {
-                errorMessage = "\(url.lastPathComponent): \(error)"
+                fehler.append("\(url.lastPathComponent): \(error)")
             }
+        }
+        if !fehler.isEmpty {
+            // Alle auf einmal, nicht nur den letzten: Beim Laden eines ganzen
+            // Ordners ginge sonst jede Meldung bis auf eine verloren.
+            errorMessage = fehler.count == 1
+                ? fehler[0]
+                : "\(fehler.count) Dateien konnten nicht gelesen werden:\n\n"
+                  + fehler.prefix(10).joined(separator: "\n")
+                  + (fehler.count > 10 ? "\n… \(fehler.count - 10) weitere" : "")
         }
     }
 
@@ -208,47 +247,9 @@ final class Store {
         panel.canChooseDirectories = true
         panel.message = "MED-/OctaMED-Songs öffnen. Ordner werden durchsucht."
         guard panel.runModal() == .OK else { return }
-        load(panel.urls.flatMap { medFiles(at: $0) })
+        accept(panel.urls)
     }
 
-    /// Findet MED-Dateien unter einem Pfad.
-    ///
-    /// **Nach Inhalt, nicht nach Endung.** Auf dem Amiga hatten die Dateien
-    /// keine Endung; der Autor hat sie später von Hand benannt, mal `.med`,
-    /// mal `.MMD`, mal `.mmd1`, und gepackte tragen zusätzlich `.pp`. Die
-    /// Kennung am Dateianfang ist das einzig Verlässliche: `MMD` plus eine
-    /// Ziffer `0`–`3`.
-    func medFiles(at url: URL) -> [URL] {
-        var istOrdner: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &istOrdner)
-        else { return [] }
-
-        if !istOrdner.boolValue { return isMEDFile(url) ? [url] : [] }
-
-        let keys: [URLResourceKey] = [.isRegularFileKey]
-        guard let läufer = FileManager.default.enumerator(
-            at: url, includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
-
-        var gefunden: [URL] = []
-        for fall in läufer {
-            guard let datei = fall as? URL,
-                  (try? datei.resourceValues(forKeys: Set(keys)))?.isRegularFile == true
-            else { continue }
-            if isMEDFile(datei) { gefunden.append(datei) }
-        }
-        return gefunden.sorted { $0.lastPathComponent < $1.lastPathComponent }
-    }
-
-    /// Prüft die Kennung, ohne die ganze Datei zu lesen.
-    private func isMEDFile(_ url: URL) -> Bool {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
-        defer { try? handle.close() }
-        guard let kopf = try? handle.read(upToCount: 4), kopf.count == 4 else { return false }
-        let bytes = Array(kopf)
-        return bytes[0] == 0x4D && bytes[1] == 0x4D && bytes[2] == 0x44   // "MMD"
-            && (0x30...0x33).contains(bytes[3])                           // '0'…'3'
-    }
 
     func close(_ id: LoadedSong.ID) {
         songs.removeAll { $0.id == id }

@@ -69,7 +69,20 @@ struct MainView: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            store.load(urls.filter { $0.isFileURL }); return true
+            // Über `accept`, nicht `load`: Ein abgelegter Ordner muss erst
+            // durchsucht werden, sonst scheitert er mit „Is a directory".
+            store.accept(urls)
+            return true
+        }
+        .overlay {
+            if store.scanning {
+                VStack(spacing: 10) {
+                    ProgressView()
+                    Text("Ordner wird durchsucht …").font(.callout)
+                }
+                .padding(24)
+                .background(.regularMaterial, in: .rect(cornerRadius: 10))
+            }
         }
         .alert("Fehler beim Laden", isPresented: .init(
             get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })

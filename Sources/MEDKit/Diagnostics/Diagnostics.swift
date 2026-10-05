@@ -23,7 +23,7 @@ public struct Warning: Sendable, CustomStringConvertible {
         case channelCollision(channel: UInt8, instruments: [Int])
         case modlenMismatch(modlen: UInt32, fileSize: Int)
         case unusualInstrExtSize(size: UInt16)
-        case incompleteDump(index: Int)
+        case incompleteDump(index: Int, reason: String)
         case cmd3xMissing(command: UInt8)
         case notesWithoutMIDIChannel(instrument: Int, name: String, notes: Int)
         case commandWithOddValueRange(number: UInt8, values: [UInt8])
@@ -47,8 +47,8 @@ public struct Warning: Sendable, CustomStringConvertible {
             message = "modlen \(m) weicht von der Dateigröße \(d) ab"
         case .unusualInstrExtSize(let g):
             message = "InstrExt-Eintragsgröße \(g) Bytes (dokumentiert sind 18)"
-        case .incompleteDump(let i):
-            message = "Dump \(i) beginnt nicht mit F0 oder endet nicht mit F7"
+        case .incompleteDump(let i, let grund):
+            message = "Dump \(i): \(grund)"
         case .cmd3xMissing(let b):
             message = "Befehl \(String(format: "%02X", b)) benutzt, aber keine Cmd3x-Tabelle vorhanden"
         case .notesWithoutMIDIChannel(let i, let n, let notes):

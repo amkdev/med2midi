@@ -323,8 +323,13 @@ public enum MEDLoader {
             let dump = SysExDump(index: i, name: name, rawData: raw)
             if !raw.isEmpty {
                 let geprüft = dump.check()
-                if !dump.isComplete || !geprüft.isIntact {
-                    warnings.append(Warning(art: .incompleteDump(index: i),
+                if !dump.isComplete {
+                    warnings.append(Warning(art: .incompleteDump(
+                        index: i, reason: "beginnt nicht mit F0 oder endet nicht mit F7"),
+                        locations: [], count: 1))
+                } else if !geprüft.isIntact {
+                    warnings.append(Warning(art: .incompleteDump(index: i,
+                                                                 reason: geprüft.text),
                                              locations: [], count: 1))
                 }
             }

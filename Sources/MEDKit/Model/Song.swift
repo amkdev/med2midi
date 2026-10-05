@@ -211,10 +211,33 @@ public struct SysExDump: Sendable {
         public let checksumsValid: Int
         /// Bytes, die nach der letzten vollständigen Nachricht übrig bleiben.
         public let trailingBytes: Int
+        /// Ob Byteanzahl und Prüfsumme überhaupt prüfbar waren.
+        ///
+        /// Das Schema mit Byteanzahl an Offset 4–5 und Zweierkomplement vor
+        /// `F7` ist **Yamahas**. Bei einem Korg-Dump bedeuten dieselben Bytes
+        /// etwas anderes; ihn danach zu prüfen ergäbe garantiert ein
+        /// Fehlurteil. Dann bleibt die Rahmenprüfung, und das ist ehrlicher
+        /// als eine erfundene Beanstandung.
+        public let schemeApplies: Bool
 
         public var isIntact: Bool {
-            messages > 0 && countsValid == messages
-                && checksumsValid == messages && trailingBytes == 0
+            guard messages > 0, trailingBytes == 0 else { return false }
+            guard schemeApplies else { return true }
+            return countsValid == messages && checksumsValid == messages
+        }
+
+        /// Einzeiler für Anzeige und Manifest.
+        public var text: String {
+            guard messages > 0 else { return "keine Nachricht erkannt" }
+            guard schemeApplies else {
+                return trailingBytes == 0
+                    ? "\(messages) Nachr., Rahmen ok (Prüfsumme nur bei Yamaha prüfbar)"
+                    : "\(messages) Nachr., \(trailingBytes) Bytes hinter der letzten"
+            }
+            return isIntact
+                ? "\(messages) Nachr., Byteanzahl und Prüfsumme ok"
+                : "\(messages) Nachr., \(countsValid) Byteanzahl ok, "
+                  + "\(checksumsValid) Prüfsumme ok, \(trailingBytes) Bytes übrig"
         }
     }
 
@@ -233,7 +256,10 @@ public struct SysExDump: Sendable {
     public func check() -> Check {
         var counts = 0, sums = 0
         let list = messages
-        for m in list {
+        // Nur Yamaha-Dumps tragen Byteanzahl und Prüfsumme an den Stellen,
+        // die hier gelesen werden. Siehe `Check.schemeApplies`.
+        let yamaha = manufacturer == 0x43
+        for m in list where yamaha {
             guard m.count >= 11 else { continue }
             let base = m.startIndex
             let declared = Int(m[base + 4]) << 8 | Int(m[base + 5])
@@ -245,7 +271,8 @@ public struct SysExDump: Sendable {
         }
         let consumed = list.reduce(0) { $0 + $1.count }
         return Check(messages: list.count, countsValid: counts,
-                     checksumsValid: sums, trailingBytes: rawData.count - consumed)
+                     checksumsValid: sums, trailingBytes: rawData.count - consumed,
+                     schemeApplies: yamaha)
     }
 }
 

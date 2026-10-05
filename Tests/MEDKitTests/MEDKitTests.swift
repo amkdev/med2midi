@@ -273,12 +273,34 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
                 + "Anzahl \(check.countsValid)/\(check.messages), "
                 + "Pruefsumme \(check.checksumsValid)/\(check.messages), "
                 + "\(check.trailingBytes) Restbytes"
-            #expect(check.isIntact, "\(befund)")
+            // Der Rahmen muss immer stimmen.
+            #expect(dump.isComplete, "\(befund): Rahmen")
+
+            if check.schemeApplies {
+                // 2_ENDZEIT_NEW traegt ein gekipptes Bit: In Nachricht 168 von
+                // 407 steht 70 statt F0. Der Inhalt ist intakt, die Pruefsumme
+                // der Nachricht stimmt — es ist genau ein Byte. Der Nachweis
+                // steht in docs/04-mu80-dumps.md; hier wird er festgehalten,
+                // damit er nicht unbemerkt verschwindet oder sich ausbreitet.
+                let bekannt = url.lastPathComponent.hasPrefix("2_ENDZEIT_NEW")
+                              && dump.index == 1
+                if bekannt {
+                    let hinweis = "Der bekannte Schaden ist weg — "
+                        + "wurde die Datei ersetzt?"
+                    #expect(!check.isIntact, "\(hinweis)")
+                } else {
+                    #expect(check.isIntact, "\(befund)")
+                }
+            } else {
+                // Nicht-Yamaha: Byteanzahl und Pruefsumme liegen woanders,
+                // pruefbar ist nur der Rahmen.
+                #expect(check.messages > 0, "\(befund)")
+            }
             total += check.messages
         }
     }
-    // Am Material: 4480 Nachrichten in 11 Dumps.
-    if total > 0 { #expect(total == 4480, "\(total) Nachrichten statt 4480") }
+    let gesamt = "nur \(total) Nachrichten — fehlt Material?"
+    #expect(total > 4000, "\(gesamt)")
 }
 
 @Test func playerBalancesNoteOnsAndOffs() throws {

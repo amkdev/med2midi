@@ -178,3 +178,36 @@ gebraucht, nur zum Nachschlagen im Einzelfall.
 
 Bei Bank MSB 127 oder Part Mode ≠ 0 ist der GM-Name falsch; das sind
 Drumkits mit eigener Liste.
+
+## Nicht jeder Dump ist von Yamaha
+
+`2_ENDZEIT_NEW.OMP_WS+MU` enthält zwei Dumps: einen für die **Korg
+Wavestation** (Hersteller `0x42`, 134 609 Bytes, eine einzige Nachricht) und
+einen für den MU80.
+
+Die Prüfung war darauf nicht vorbereitet. Byteanzahl an Offset 4–5 und
+Zweierkomplement vor `F7` sind **Yamahas** Schema; beim Korg stehen dort andere
+Bytes. Angewendet ergab es garantiert ein Fehlurteil, und die Warnung behauptete
+dann noch etwas Falsches („beginnt nicht mit F0") — der Rahmen war in Ordnung.
+
+`Check.schemeApplies` sagt jetzt, ob geprüft werden konnte. Bei fremden
+Herstellern bleibt die Rahmenprüfung, und das steht auch so da.
+
+## Ein gekipptes Bit
+
+In `2_ENDZEIT_NEW.OMP_WS+MU`, MU80-Dump, Nachricht **168 von 407**, Offset 6824:
+dort steht `70` statt `F0`.
+
+Es ist genau ein Bit. Der Rest der Nachricht ist unversehrt — 27 Bytes, und die
+Yamaha-Prüfsumme stimmt. Damit ist auch sicher, dass `F0` dort hingehört: Eine
+SysEx-Nachricht kann gar nicht anders beginnen, und der Inhalt bestätigt sich
+selbst.
+
+Über alle zwölf Yamaha-Dumps der acht Dateien ist das der **einzige** Fall.
+
+**Folge beim Senden:** Ein Empfänger ignoriert diese Nachricht und deutet die
+folgenden Bytes als Daten der vorigen — die Einstellungen eines Parts fehlen.
+Der Schaden steckt in der Originaldatei, nicht im Export.
+
+Der Test hält den Befund fest: Bricht er, ist entweder der Schaden repariert
+worden oder ein neuer dazugekommen.

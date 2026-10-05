@@ -119,9 +119,15 @@ struct PatternView: View {
     private func cellView(row: Int, track: Int) -> some View {
         let z = block.cell(row: row, track: track)
         let b = block.command(row: row, track: track, page: store.position.page)
+        // Zelle ohne Note, aber mit Instrumentnummer: OctaMED zeichnet dort
+        // ein senkrechtes Zeichen. Es ist keine Verzierung — jede solche
+        // Zeile verlängert die klingende Note um eine Zeile.
+        let haelt = z.note == 0 && z.instrument != 0
         return HStack(spacing: 0) {
-            Text(z.noteName)
-                .foregroundStyle(z.note > 0 ? Color(nsColor: .white) : Color.gray.opacity(0.45))
+            Text(haelt ? PatternRendering.holdGlyph : z.noteName)
+                .foregroundStyle(z.note > 0 ? Color(nsColor: .white)
+                                 : (haelt ? instrumentColour(z.instrument).opacity(0.7)
+                                          : Color.gray.opacity(0.45)))
             Text(" ")
             Text(PatternRendering.instrumentDigit(z.instrument))
                 .foregroundStyle(z.instrument > 0 ? instrumentColour(z.instrument)
@@ -136,7 +142,11 @@ struct PatternView: View {
 
     private func explanation(cell: Cell, command: Command) -> String {
         var parts: [String] = []
-        if cell.note > 0 { parts.append("Note \(cell.noteName)") }
+        if cell.note > 0 {
+            parts.append("Note \(cell.noteName)")
+        } else if cell.instrument > 0 {
+            parts.append("Hält die klingende Note eine Zeile länger")
+        }
         if cell.instrument > 0 {
             let i = instrument(cell.instrument)
             let name = i?.name.isEmpty == false ? " „\(i!.name)“" : ""

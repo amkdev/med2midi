@@ -97,3 +97,20 @@ import Foundation
     #expect(takt.blockRows == [48, 96, 192])
     #expect(takt.candidates == [2, 3, 6])
 }
+
+@Test func medFilesAreRecognisedByTheirMagicNotTheirExtension() throws {
+    // Auf dem Amiga hatten die Dateien keine Endung. Der Autor hat sie spaeter
+    // von Hand benannt — .med, .MMD, .mmd1, und gepackte tragen zusaetzlich
+    // .pp. Die Kennung am Dateianfang ist das einzig Verlaessliche.
+    var endungen = Set<String>()
+    for url in TestFiles.all {
+        endungen.insert(url.pathExtension.lowercased())
+        let kopf = try FileHandle(forReadingFrom: url).read(upToCount: 4)
+        let bytes = Array(try #require(kopf))
+        #expect(bytes[0...2].elementsEqual("MMD".utf8), "\(url.lastPathComponent)")
+        #expect((0x30...0x33).contains(bytes[3]), "\(url.lastPathComponent)")
+    }
+    // Das Material hat tatsaechlich mehrere Endungen — sonst waere der Test
+    // ohne Aussage.
+    #expect(endungen.count > 1, "nur eine Endung im Material: \(endungen)")
+}

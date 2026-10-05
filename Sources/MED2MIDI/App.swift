@@ -21,6 +21,15 @@ struct MED2MIDIApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("Öffnen …") { store.showOpenPanel() }
                     .keyboardShortcut("o")
+                Divider()
+                Button("Exportieren") { store.exportCurrent() }
+                    .keyboardShortcut("e")
+                    .disabled(store.current == nil || store.exporting)
+                Button("Alle Songs exportieren") { store.exportAll() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(store.songs.count < 2 || store.exporting)
+                Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
+                    .disabled(store.exporting)
             }
             CommandMenu("Navigation") {
                 Button("Nächster Block (Songreihenfolge)") { store.stepInSongOrder(1) }
@@ -271,7 +280,12 @@ struct MainView: View {
             Button {
                 store.exportCurrent()
             } label: {
-                if store.exporting {
+                if let p = store.exportProgress {
+                    HStack(spacing: 5) {
+                        ProgressView().controlSize(.small)
+                        Text("\(p.done)/\(p.total)").font(.caption.monospacedDigit())
+                    }
+                } else if store.exporting {
                     ProgressView().controlSize(.small)
                 } else {
                     Label("Exportieren", systemImage: "square.and.arrow.up")
@@ -282,6 +296,9 @@ struct MainView: View {
                   ?? "Zielordner wählen und exportieren")
 
             Menu {
+                Button("Alle \(store.songs.count) Songs exportieren") { store.exportAll() }
+                    .disabled(store.songs.count < 2)
+                Divider()
                 Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
                 if let ordner = store.exportFolder {
                     Divider()

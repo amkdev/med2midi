@@ -33,6 +33,8 @@ final class Store {
     var exporting = false
     /// Ergebnis des letzten Exports, für die Meldung.
     var exportReport: ExportReport?
+    /// Fortschritt beim Stapelexport.
+    var exportProgress: (done: Int, total: Int)?
 
     struct ExportReport: Identifiable {
         let id = UUID()
@@ -64,25 +66,74 @@ final class Store {
         UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
     }
 
+    /// Exportiert alle geladenen Songs in denselben Zielordner.
+    ///
+    /// Die Arbeit läuft neben dem Hauptthread: Bei sieben Dateien dauert sie
+    /// mehrere Sekunden, und solange soll sich das Fenster weiter bedienen
+    /// lassen.
+    func exportAll(askForFolder: Bool = false) {
+        guard !songs.isEmpty else { return }
+        guard let ordner = chooseFolder(ask: askForFolder) else { return }
+
+        let liste = songs
+        exporting = true
+        exportProgress = (0, liste.count)
+
+        Task {
+            var zeilen: [String] = []
+            var fehler = 0
+            for (i, loaded) in liste.enumerated() {
+                let song = loaded.song
+                let ergebnis = await Task.detached(priority: .userInitiated) {
+                    Result { try Export.writeAll(song: song, to: ordner) }
+                }.value
+                switch ergebnis {
+                case .success(let r):
+                    var zeile = "\(r.folder.lastPathComponent)/  "
+                        + "\(r.midi.trackCount) Spuren, "
+                        + String(format: "%.1f s", r.midi.seconds)
+                    if let sysEx = r.sysEx { zeile += ", \(sysEx.dumps.count) Dumps" }
+                    if !r.midi.warnings.isEmpty {
+                        zeile += "  (\(r.midi.warnings.count) Hinweise)"
+                    }
+                    zeilen.append(zeile)
+                case .failure(let error):
+                    fehler += 1
+                    zeilen.append("FEHLER  \(loaded.url.lastPathComponent): \(error)")
+                }
+                exportProgress = (i + 1, liste.count)
+            }
+            zeilen.append("")
+            zeilen.append(fehler == 0
+                          ? "\(liste.count) Songs exportiert."
+                          : "\(liste.count - fehler) von \(liste.count) exportiert, \(fehler) fehlgeschlagen.")
+            exportReport = ExportReport(folder: ordner, lines: zeilen, failed: fehler > 0)
+            exportProgress = nil
+            exporting = false
+        }
+    }
+
+    /// Zielordner, gemerkt oder frisch gewählt.
+    private func chooseFolder(ask: Bool) -> URL? {
+        if !ask, let gemerkt = exportFolder { return gemerkt }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Hierhin exportieren"
+        panel.message = "Zielordner für den Export wählen. "
+                      + "Je Song entsteht darin ein eigener Ordner."
+        panel.directoryURL = exportFolder
+        guard panel.runModal() == .OK, let gewaehlt = panel.url else { return nil }
+        remember(gewaehlt)
+        return gewaehlt
+    }
+
     /// Fragt nach dem Zielordner, wenn noch keiner gemerkt ist, und exportiert.
     func exportCurrent(askForFolder: Bool = false) {
         guard let loaded = current else { return }
-        var ziel = askForFolder ? nil : exportFolder
-        if ziel == nil {
-            let panel = NSOpenPanel()
-            panel.canChooseDirectories = true
-            panel.canChooseFiles = false
-            panel.canCreateDirectories = true
-            panel.allowsMultipleSelection = false
-            panel.prompt = "Hierhin exportieren"
-            panel.message = "Zielordner für den Export wählen. "
-                          + "Je Song entsteht darin ein eigener Ordner."
-            panel.directoryURL = exportFolder
-            guard panel.runModal() == .OK, let gewaehlt = panel.url else { return }
-            remember(gewaehlt)
-            ziel = gewaehlt
-        }
-        guard let ordner = ziel else { return }
+        guard let ordner = chooseFolder(ask: askForFolder) else { return }
         export(loaded, to: ordner)
     }
 
@@ -154,9 +205,49 @@ final class Store {
     func showOpenPanel() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.message = "MED-/OctaMED-Songs öffnen"
-        if panel.runModal() == .OK { load(panel.urls) }
+        panel.canChooseDirectories = true
+        panel.message = "MED-/OctaMED-Songs öffnen. Ordner werden durchsucht."
+        guard panel.runModal() == .OK else { return }
+        load(panel.urls.flatMap { medFiles(at: $0) })
+    }
+
+    /// Findet MED-Dateien unter einem Pfad.
+    ///
+    /// **Nach Inhalt, nicht nach Endung.** Auf dem Amiga hatten die Dateien
+    /// keine Endung; der Autor hat sie später von Hand benannt, mal `.med`,
+    /// mal `.MMD`, mal `.mmd1`, und gepackte tragen zusätzlich `.pp`. Die
+    /// Kennung am Dateianfang ist das einzig Verlässliche: `MMD` plus eine
+    /// Ziffer `0`–`3`.
+    func medFiles(at url: URL) -> [URL] {
+        var istOrdner: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &istOrdner)
+        else { return [] }
+
+        if !istOrdner.boolValue { return isMEDFile(url) ? [url] : [] }
+
+        let keys: [URLResourceKey] = [.isRegularFileKey]
+        guard let läufer = FileManager.default.enumerator(
+            at: url, includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
+
+        var gefunden: [URL] = []
+        for fall in läufer {
+            guard let datei = fall as? URL,
+                  (try? datei.resourceValues(forKeys: Set(keys)))?.isRegularFile == true
+            else { continue }
+            if isMEDFile(datei) { gefunden.append(datei) }
+        }
+        return gefunden.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Prüft die Kennung, ohne die ganze Datei zu lesen.
+    private func isMEDFile(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let kopf = try? handle.read(upToCount: 4), kopf.count == 4 else { return false }
+        let bytes = Array(kopf)
+        return bytes[0] == 0x4D && bytes[1] == 0x4D && bytes[2] == 0x44   // "MMD"
+            && (0x30...0x33).contains(bytes[3])                           // '0'…'3'
     }
 
     func close(_ id: LoadedSong.ID) {

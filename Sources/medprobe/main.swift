@@ -15,10 +15,8 @@ struct Options {
     var patternOnly = false
     var exportFolder: String?
     var events = false
-    var midiFolder: String?
     var layout = MIDIExport.TrackLayout.perInstrument
     var embedSysEx = false
-    var relieveBursts = false
     var eventLimit = 60
 }
 
@@ -40,9 +38,7 @@ while i < args.count {
     case "--seite":  i += 1; o.page = Int(args[i]) ?? 0
     case "--export": i += 1; o.exportFolder = args[i]
     case "--events": o.events = true
-    case "--midi": i += 1; o.midiFolder = args[i]
     case "--mit-sysex": o.embedSysEx = true
-    case "--entzerrt": o.relieveBursts = true
     case "--alle": o.eventLimit = Int.max
     case "--hilfe", "-h":
         print("""
@@ -51,17 +47,13 @@ while i < args.count {
           ohne --block   Überblick: Kopfdaten, Instrumente, Dumps, Befehlsstatistik
           mit  --block   Pattern-Ansicht im OctaMED-Format
 
-        medprobe --export <ordner> <datei> …
-          schreibt die SysEx-Dumps als .syx samt Manifest
+        medprobe --export <ordner> [--spuren-nach instrument|kanal|medspur]
+                          [--mit-sysex] <datei> …
+          schreibt je Song einen Ordner mit MIDI-Datei, entzerrter Fassung
+          und sysex/ (Dumps, Manifest, Part-Belegung)
 
         medprobe --events [--alle] <datei> …
           spielt den Song durch und listet die MIDI-Ereignisse
-
-        medprobe --midi <ordner> [--spuren-nach instrument|kanal|medspur]
-                        [--mit-sysex] [--entzerrt] <datei> …
-          schreibt eine Standard-MIDI-Datei je Song. --entzerrt zieht
-          Note-Offs und Controller vor den Zeilenanfang, damit die
-          MIDI-Leitung beim Zeilenwechsel nicht ueberlaeuft.
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -86,30 +78,6 @@ for pfad in o.files {
         continue
     }
 
-    if let ordner = o.midiFolder {
-        let basis = (url.lastPathComponent as NSString).deletingPathExtension
-        let ziel = URL(fileURLWithPath: ordner)
-            .appendingPathComponent(basis + (o.relieveBursts ? "-entzerrt" : "") + ".mid")
-        do {
-            try FileManager.default.createDirectory(at: URL(fileURLWithPath: ordner),
-                                                    withIntermediateDirectories: true)
-            var optionen = MIDIExport.Options()
-            optionen.layout = o.layout
-            optionen.embedSysEx = o.embedSysEx
-            optionen.relieveBursts = o.relieveBursts
-            let r = try MIDIExport.write(song: song, to: ziel, options: optionen)
-            let größe = (try? Data(contentsOf: ziel).count) ?? 0
-            print("\(url.lastPathComponent) -> \(ziel.lastPathComponent)  "
-                + "\(r.trackCount) Spuren, \(r.eventCount) Ereignisse, "
-                + String(format: "%.1f s, ", r.seconds) + "\(größe) Bytes")
-            for w in r.warnings.prefix(5) { print("   • \(w)") }
-            if r.warnings.count > 5 { print("   … \(r.warnings.count - 5) weitere") }
-        } catch {
-            print("\(url.lastPathComponent): Export fehlgeschlagen — \(error)")
-        }
-        continue
-    }
-
     if o.events {
         let result = Player(song: song).run()
         print(EventListing.text(for: result, song: song, limit: o.eventLimit))
@@ -120,15 +88,29 @@ for pfad in o.files {
     }
 
     if let ordner = o.exportFolder {
-        let ziel = URL(fileURLWithPath: ordner)
-            .appendingPathComponent((url.lastPathComponent as NSString).deletingPathExtension)
         do {
-            let r = try SysExExport.write(song: song, to: ziel)
-            print("\(url.lastPathComponent): \(r.dumps.count) Dumps nach \(ziel.path)")
-            for d in r.dumps {
-                let status = d.triggeredAt != nil ? "ausgelöst" : "nur gespeichert"
-                print("   \(d.fileName)  \(d.byteCount) B  \(d.messageCount) Nachr.  "
-                    + "\(d.hash)  \(status)")
+            var optionen = MIDIExport.Options()
+            optionen.layout = o.layout
+            optionen.embedSysEx = o.embedSysEx
+            let r = try Export.writeAll(song: song, to: URL(fileURLWithPath: ordner),
+                                        options: optionen)
+            let groesse = { (u: URL) in (try? Data(contentsOf: u).count) ?? 0 }
+            print("\(url.lastPathComponent) -> \(r.folder.lastPathComponent)/")
+            print("   \(r.midi.url.lastPathComponent)  \(r.midi.trackCount) Spuren, "
+                + String(format: "%.1f s, ", r.midi.seconds) + "\(groesse(r.midi.url)) B")
+            print("   \(r.relieved.url.lastPathComponent)  entzerrt, "
+                + "\(groesse(r.relieved.url)) B")
+            if let sysEx = r.sysEx {
+                print("   sysex/  \(sysEx.dumps.count) Dumps, dumps.txt, parts.txt")
+                for d in sysEx.dumps {
+                    let status = d.triggeredAt != nil ? "ausgelöst" : "nur gespeichert"
+                    print("      \(d.fileName)  \(d.byteCount) B  \(d.messageCount) Nachr.  "
+                        + "\(d.hash)  \(status)")
+                }
+            }
+            for w in r.midi.warnings.prefix(5) { print("   • \(w)") }
+            if r.midi.warnings.count > 5 {
+                print("   … \(r.midi.warnings.count - 5) weitere Hinweise")
             }
         } catch {
             print("\(url.lastPathComponent): Export fehlgeschlagen — \(error)")

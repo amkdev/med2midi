@@ -581,3 +581,24 @@ Das SMF-Format kennt ohnehin keine Clips. Typ 2 ist dafür gedacht
 („sequentially independent single-track patterns"), wird aber praktisch von
 keiner DAW unterstützt. Marker (`FF 06`) sind das Nächste daran und stehen
 weiterhin in der Datei.
+
+## Ordnerstruktur des Exports
+
+Ein Befehl, eine Struktur:
+
+    medprobe --export <ziel> songs/*
+
+    <ziel>/<Songdatei ohne Endung>/
+        <name>.mid              Standard-MIDI-File, zeitlich exakt
+        <name>-entzerrt.mid     dasselbe mit entlasteter MIDI-Leitung
+        sysex/
+            …-dumpNN.syx        je Dump eine Datei
+            dumps.txt           Prüfsummen, Fundstellen, Hinweise zum Senden
+            parts.txt           Part-Belegung des MU80, nach Kanal gruppiert
+
+Die entzerrte Fassung liegt **neben** der exakten, statt sie zu ersetzen.
+Welche die richtige ist, hängt davon ab, was damit geschieht: Beim spurweisen
+Aufnehmen gibt es die Engstelle nicht, dort ist die exakte besser. Erst beim
+Abspielen des ganzen Songs über eine DIN-Leitung lohnt die Verschiebung.
+
+`--midi` und `--entzerrt` sind entfallen; beides steckt in `--export`.

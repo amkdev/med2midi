@@ -358,3 +358,25 @@ func soundingTime(_ url: URL) throws -> (ticks: Int, hanging: Int) {
         #expect(zuKurz == 0, "\(url.lastPathComponent): \(zuKurz) Noten ohne Laenge")
     }
 }
+
+@Test func exportWritesTheWholeStructure() throws {
+    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let song = try MEDLoader.load(file: url)
+    let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("med2midi-export-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: ordner) }
+
+    let r = try Export.writeAll(song: song, to: ordner)
+    let fm = FileManager.default
+    #expect(r.folder.lastPathComponent == "N_ich_will_neues")
+    for pfad in ["N_ich_will_neues.mid", "N_ich_will_neues-entzerrt.mid",
+                 "sysex/dumps.txt", "sysex/parts.txt"] {
+        #expect(fm.fileExists(atPath: r.folder.appendingPathComponent(pfad).path), "\(pfad)")
+    }
+    // Die exakte Fassung bleibt exakt — das ist ihr Zweck.
+    let exakt = try SMFReader(Data(contentsOf: r.midi.url))
+    let entzerrt = try SMFReader(Data(contentsOf: r.relieved.url))
+    #expect(exakt.events.count == entzerrt.events.count)
+    #expect(try soundingTime(r.midi.url).hanging == 0)
+    #expect(try soundingTime(r.relieved.url).hanging == 0)
+}

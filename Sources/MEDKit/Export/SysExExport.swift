@@ -177,5 +177,13 @@ public enum SysExExport {
         """
         try text.write(to: result.folder.appendingPathComponent("dumps.txt"),
                        atomically: true, encoding: .utf8)
+
+        // Die Part-Belegung daneben legen. Sie steht in den Dumps, ist in
+        // deren Rohbytes aber nicht lesbar — und beim Neuinstrumentieren ist
+        // sie das Wichtigste, was die MED-Datei nicht hergibt: welcher Klang
+        // auf welchem Kanal lag, und wo mehrere Parts übereinanderliegen.
+        try PartListing.text(for: song)
+            .write(to: result.folder.appendingPathComponent("parts.txt"),
+                   atomically: true, encoding: .utf8)
     }
 }

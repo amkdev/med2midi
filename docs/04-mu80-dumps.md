@@ -110,3 +110,71 @@ MU80-Handbuch — die Zuordnung passt aber exakt zu den gemessenen zwei Parts.*
 Für Punkt 2 braucht es den MIDI-Datenformat-Anhang des MU80-Handbuchs und die
 XG-Spezifikation. Ohne die bleibt es beim Rohstrom — der aber bereits
 exportiert wird und sich in das Gerät zurückspielen lässt.
+
+## Part-Belegung: was in den Dumps lesbar ist
+
+Die Dumps folgen dem **XG-Standardschema**. Modell-ID `4C`, Adresse
+`08 nn 00` für Part `nn`, danach die Parameter in fester Reihenfolge:
+
+| Offset | Parameter | Mittelwert |
+|---|---|---|
+| 0 | Element Reserve | |
+| 1, 2 | Bank MSB, LSB | |
+| 3 | Programmnummer (0-basiert) | |
+| 4 | Empfangskanal (0–15) | |
+| 7 | Part Mode (0 = normal) | |
+| 8 | Note Shift | `0x40` |
+| 11 | Volume | |
+| 14 | Pan | `0x40` |
+| 18, 19, 20 | Chorus, Reverb, Variation Send | |
+
+### Dreifach gegengeprüft
+
+1. **Die Empfangskanäle passen zu den MED-Instrumenten.** In
+   `N_ich_will_neues` haben alle 13 belegten Parts Kanäle, auf denen auch
+   MED-Instrumente liegen. Wäre das Offset falsch, träfe nichts aufeinander.
+2. **Note Shift und Pan stehen auf `0x40`**, dem XG-Mittelwert — genau dort,
+   wo Mittenwerte stehen müssen. Die Ausnahmen sind plausibel: Part 6 hat
+   `0x4C`, also +12 Halbtöne, eine Oktavschicht.
+3. **Part Mode ist 0** bei allen melodischen Parts und zeigt auf den
+   Schlagzeugkanälen ein Drum-Setup.
+
+### Der eigentliche Befund: Schichtung
+
+Mehrere Parts empfangen auf demselben MIDI-Kanal und klingen zusammen. Das
+sieht man den MED-Daten **nicht** an — dort ist es ein Kanal. In
+`N_ich_will_neues` liegen auf Kanal 5 drei Parts, auf den Kanälen 2, 3, 4 und
+10 je zwei.
+
+Das erklärt auch, warum die Stimmenzahl höher ist als die Notenzahl: Aus 19
+gleichzeitigen Noten werden 37 Stimmen.
+
+### Element Reserve und die Aussetzer
+
+Die Reserven stehen bei allen Dateien auf der XG-Werkseinstellung
+(6, 2, 2, …), zusammen **48 der 64 Stimmen**. Frei verteilbar bleiben 16. Ein
+Part, der mehr Töne spielt als seine Reserve hergibt, bedient sich aus diesem
+Rest.
+
+Gerechnet über die Songs:
+
+| Datei | max. Bedarf über die Reserven | Stellen über 16 |
+|---|---|---|
+| `N_ich_will_neues` | 22 | **51** |
+| `sehnsuchts_blues` | 19 | 5 |
+| übrige | 10–12 | 0 |
+
+`N_ich_will_neues` ist genau der Song, bei dem der Autor Aussetzer hört, und
+der einzige mit nennenswert vielen solchen Stellen — bei 0,9 % der Spielzeit.
+Das ist ein **Modell** der XG-Stimmenverteilung, nicht am Gerät nachgemessen;
+die Übereinstimmung ist aber deutlich.
+
+### Klangnamen
+
+`MultiPart.generalMIDINames` liefert die 128 GM-Namen. Die XG-Variante aus der
+Bank ändert den Klang, behält aber den Charakter. Der genaue Name steht in der
+„Sound List" des MU80 unter Bank und Programmnummer — das PDF wird dafür nicht
+gebraucht, nur zum Nachschlagen im Einzelfall.
+
+Bei Bank MSB 127 oder Part Mode ≠ 0 ist der GM-Name falsch; das sind
+Drumkits mit eigener Liste.

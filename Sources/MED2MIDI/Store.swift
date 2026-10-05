@@ -76,10 +76,10 @@ final class Store {
     /// Die Arbeit läuft neben dem Hauptthread: Bei sieben Dateien dauert sie
     /// mehrere Sekunden, und solange soll sich das Fenster weiter bedienen
     /// lassen.
-    func exportAll(askForFolder: Bool = false) {
+    func exportAll() {
         let liste = batchSongs
         guard !liste.isEmpty else { return }
-        guard let ordner = chooseFolder(ask: askForFolder) else { return }
+        guard let ordner = chooseFolder() else { return }
         exporting = true
         exportProgress = (0, liste.count)
 
@@ -117,9 +117,12 @@ final class Store {
         }
     }
 
-    /// Zielordner, gemerkt oder frisch gewählt.
-    private func chooseFolder(ask: Bool) -> URL? {
-        if !ask, let gemerkt = exportFolder { return gemerkt }
+    /// Fragt nach dem Zielordner — jedes Mal.
+    ///
+    /// Der gemerkte Ordner ersetzt den Dialog **nicht**, er bestimmt nur, wo
+    /// er aufgeht. Wohin exportiert wird, soll eine bewusste Entscheidung
+    /// bleiben; was niemand jedes Mal tun will, ist dorthin zu navigieren.
+    private func chooseFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -128,6 +131,8 @@ final class Store {
         panel.prompt = "Hierhin exportieren"
         panel.message = "Zielordner für den Export wählen. "
                       + "Je Song entsteht darin ein eigener Ordner."
+        // Dort aufgehen, wo zuletzt exportiert wurde — über Programmstarts
+        // hinweg, als Lesezeichen abgelegt.
         panel.directoryURL = exportFolder
         guard panel.runModal() == .OK, let gewaehlt = panel.url else { return nil }
         remember(gewaehlt)
@@ -135,9 +140,9 @@ final class Store {
     }
 
     /// Fragt nach dem Zielordner, wenn noch keiner gemerkt ist, und exportiert.
-    func exportCurrent(askForFolder: Bool = false) {
+    func exportCurrent() {
         guard let loaded = current else { return }
-        guard let ordner = chooseFolder(ask: askForFolder) else { return }
+        guard let ordner = chooseFolder() else { return }
         export(loaded, to: ordner)
     }
 

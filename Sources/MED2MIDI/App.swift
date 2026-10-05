@@ -29,8 +29,6 @@ struct MED2MIDIApp: App {
                        ? "Auswahl exportieren" : "Alle Songs exportieren") { store.exportAll() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(store.batchSongs.count < 2 || store.exporting)
-                Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
-                    .disabled(store.exporting)
                 Divider()
                 Button(store.selection.count > 1
                        ? "\(store.selection.count) Songs entfernen" : "Song entfernen") {
@@ -345,7 +343,7 @@ struct MainView: View {
                 }
             }
             .disabled(store.exporting)
-            .help(store.exportFolder.map { "Exportiert nach \($0.path)" }
+            .help(store.exportFolder.map { "Zielordner wählen — zuletzt: \($0.path)" }
                   ?? "Zielordner wählen und exportieren")
 
             Menu {
@@ -353,12 +351,10 @@ struct MainView: View {
                        ? "Auswahl exportieren (\(store.selection.count))"
                        : "Alle \(store.songs.count) Songs exportieren") { store.exportAll() }
                     .disabled(store.batchSongs.count < 2)
-                Divider()
-                Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
                 if let ordner = store.exportFolder {
                     Divider()
-                    Text(ordner.path)
-                    Button("Im Finder zeigen") {
+                    Text("Zuletzt: \(ordner.lastPathComponent)")
+                    Button("Zuletzt verwendeten Ordner im Finder zeigen") {
                         NSWorkspace.shared.activateFileViewerSelecting([ordner])
                     }
                 }

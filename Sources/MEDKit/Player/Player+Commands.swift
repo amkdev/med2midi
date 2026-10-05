@@ -4,13 +4,16 @@ extension Player {
 
     /// Starts a note and works out when it ends.
     ///
-    /// Length, measured on the original:
-    /// `hold rows × row + hold × tick`, where the hold rows are the cells below
-    /// that carry only the instrument number. `hold == 0` means unlimited — the
-    /// note then runs until `0F FF` or the next note on the track.
-    /// See `Timing.noteDuration`.
+    /// Die Länge führt die Abspielroutine als Zähler `trk_noteoffcnt` in
+    /// MED-Ticks: Er beginnt beim Hold-Wert des Instruments, `HoldAndFade`
+    /// zieht je Tick eins ab, und sobald er negativ wird, kommt das Note-Off —
+    /// das sind `hold + 1` Ticks. Jede gehaltene Zeile addiert `tempo2` dazu,
+    /// siehe `extendHold(…)`.
+    ///
+    /// `hold == 0` setzt den Zähler auf `0xFF`; er wird dann nie verringert,
+    /// und die Note läuft bis `0F FF` oder zur nächsten Note.
     func startNote(cell: Cell, track: Int, instrument: Instrument,
-                   block: Block, row: Int, at tick: Int, location: SourceLocation,
+                   at tick: Int, location: SourceLocation,
                    ticksPerRow: Int, ticksPerLine: Int,
                    events: inout [MIDIEvent], tracks: inout [Int: TrackStateBox]) {
         var state = tracks[track] ?? TrackStateBox()
@@ -49,14 +52,43 @@ extension Player {
 
         let hold = instrument.hold ?? 0
         if hold == 0 {
-            state.holdExpiry = nil                       // unlimited
+            state.holdExpiry = nil                       // unbegrenzt
         } else {
-            let holdRows = block.holdRows(afterRow: row, track: track)
-            let ticks = holdRows * ticksPerRow
-                      + Int((Double(hold) / Double(ticksPerLine) * Double(ticksPerRow)).rounded())
-            state.holdExpiry = tick + max(ticks, 1)
+            let medTicks = Int(hold) + 1
+            state.holdExpiry = tick + max(medTicks * ticksPerRow / max(ticksPerLine, 1), 1)
         }
         state.sounding = (note, channel, instrument.number == 0 ? 0 : UInt8(instrument.number), tick)
+        tracks[track] = state
+    }
+
+    /// Verlängert den Hold um eine Zeile, wenn die Zelle nur eine
+    /// Instrumentnummer trägt — das Zeichen, das OctaMED als Pipe zeichnet.
+    ///
+    /// Die Abspielroutine prüft das beim Zeilenwechsel, bevor die Zeile
+    /// gespielt wird, und zwar so (MMD1-Zweig):
+    ///
+    ///     TST.B   trk_noteoffcnt(A1)   ;hold??
+    ///     BMI.S   .plr_holdend         ;schon aus -> nichts tun
+    ///     MOVE.B  (A3),D1              ;Notenbyte
+    ///     BNE.S   .plr_holD1           ;Note da -> andere Prüfung
+    ///     MOVE.B  1(A3),D0
+    ///     AND.B   #$3F,D0              ;Instrumentnummer?
+    ///     BEQ.S   .plr_holdend         ;keine -> nicht halten
+    ///     BRA.S   .plr_holD2           ;vorhanden -> weiter halten
+    ///     …
+    ///     .plr_holD2:
+    ///     ADD.B   D3,trk_noteoffcnt(A1) ;continue holding...
+    ///
+    /// Geprüft wird **nur, ob überhaupt eine Instrumentnummer dasteht**. Der
+    /// Befehl der Zelle spielt keine Rolle, und es wird auch nicht verglichen,
+    /// ob es dieselbe Nummer ist wie bei der klingenden Note. `D3` ist
+    /// `msng_tempo2`, also genau eine Zeile.
+    func extendHold(cell: Cell, track: Int, at tick: Int, ticksPerRow: Int,
+                    tracks: inout [Int: TrackStateBox]) {
+        guard cell.note == 0, cell.instrument != 0 else { return }
+        var state = tracks[track] ?? TrackStateBox()
+        guard state.sounding != nil, let expiry = state.holdExpiry, tick < expiry else { return }
+        state.holdExpiry = expiry + ticksPerRow
         tracks[track] = state
     }
 

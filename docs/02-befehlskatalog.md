@@ -700,3 +700,51 @@ Spurlautstärke. Das deckt sich mit der Beobachtung des Autors bei `C80`.
 
 In den sieben vorliegenden Dateien kommt es **kein einziges Mal** vor: 22 046
 `0C`-Befehle, davon 0 mit gesetztem Bit. Abgebildet ist es trotzdem.
+
+## Hold: die Pipe hält, egal welcher Befehl danebensteht
+
+**Am Assembler belegt**, nachdem der Autor sah, dass Noten mit Pipes im Export
+kurz blieben statt über die Haltezeilen zu laufen.
+
+Die Länge führt die Abspielroutine als Zähler `trk_noteoffcnt` in MED-Ticks.
+Er beginnt beim Hold-Wert des Instruments, `HoldAndFade` zieht je Tick eins ab,
+und sobald er negativ wird, kommt das Note-Off — also `hold + 1` Ticks.
+`hold == 0` setzt ihn auf `0xFF`; er wird dann nie verringert, und die Note
+läuft bis `0F FF` oder zur nächsten Note.
+
+Beim Zeilenwechsel prüft die Routine, ob die neue Zeile den Hold verlängert
+(MMD1-Zweig, `D3` ist `msng_tempo2`, also eine Zeile):
+
+    TST.B   trk_noteoffcnt(A1)   ;hold??
+    BMI.S   .plr_holdend         ;schon aus -> nichts tun
+    MOVE.B  (A3),D1              ;Notenbyte
+    BNE.S   .plr_holD1           ;Note da -> andere Prüfung
+    MOVE.B  1(A3),D0
+    AND.B   #$3F,D0              ;Instrumentnummer?
+    BEQ.S   .plr_holdend         ;keine -> nicht halten
+    BRA.S   .plr_holD2           ;vorhanden -> weiter halten
+    .plr_holD1:
+    AND.B   #$7f,D1              ;Note??
+    BEQ.S   .plr_holD2           ;keine -> weiter halten
+    MOVE.B  2(A3),D1
+    SUBQ.B  #3,D1                ;Befehl 3 (Slide)?
+    BNE.S   .plr_holdend         ;nein -> Hold beenden
+    .plr_holD2:
+    ADD.B   D3,trk_noteoffcnt(A1) ;continue holding...
+
+Geprüft wird **nur, ob überhaupt eine Instrumentnummer dasteht**. Der Befehl
+der Zelle spielt keine Rolle, und es wird auch nicht verglichen, ob es dieselbe
+Nummer ist wie bei der klingenden Note.
+
+Beide Zusatzbedingungen hatte `holdRows` erfunden: Die Haltezeile musste
+befehlsfrei sein und dieselbe Instrumentnummer tragen. In
+`N_ich_will_neues`, Block 2 „intro2a", Spur 3 tragen die elf Haltezeilen je
+einen Befehl `31`. Die Schleife brach damit sofort ab, und aus einer Note über
+zwölf Zeilen wurde eine über 1,2.
+
+### Anzeige
+
+OctaMED zeichnet in die Notenspalte ein senkrechtes Zeichen, wo nur die
+Instrumentnummer steht. `PatternRendering` tat das nicht und zeigte `---` wie
+bei einer leeren Zelle — gerade die Spalte, in der sich Original und Nachbau
+vergleichen lassen. Jetzt steht dort `‖`.

@@ -34,6 +34,18 @@ public struct Player {
         public let warnings: [String]
         /// Total length in ticks, including the trailing note-offs.
         public let lengthInTicks: Int
+        /// Wo jeder Eintrag der Songreihenfolge beginnt und endet.
+        public let spans: [BlockSpan]
+    }
+
+    /// Ein Eintrag der Songreihenfolge mit seiner Lage auf der Zeitachse.
+    public struct BlockSpan: Sendable {
+        public let position: Int
+        public let block: Int
+        public let name: String
+        public let startTick: Int
+        public let endTick: Int
+        public let rows: Int
     }
 
     /// Per-track state the play routine keeps (`trk_*` in the assembler).
@@ -86,6 +98,7 @@ public struct Player {
         var tempoValue = Int(song.defaultTempo)
         var ticksPerLine = Int(song.ticksPerRow)
         var stopped = false
+        var spans: [BlockSpan] = []
 
         events.append(MIDIEvent(tick: 0, channel: nil,
                                 kind: .tempo(microsecondsPerQuarter(tempo: tempoValue,
@@ -103,6 +116,7 @@ public struct Player {
 
             let label = block.name.isEmpty ? "Block \(blockNumber)" : block.name
             events.append(MIDIEvent(tick: tick, channel: nil, kind: .marker(label)))
+            let spanStart = tick
 
             for row in 0..<block.rows {
                 if stopped { break }
@@ -111,6 +125,12 @@ public struct Player {
                 // carry more than one.
                 for track in 0..<block.tracks {
                     let cell = block.cell(row: row, track: track)
+
+                    // Erst die Hold-Verlängerung: Die Abspielroutine prüft sie
+                    // beim Zeilenwechsel, bevor die Zeile gespielt wird.
+                    extendHold(cell: cell, track: track, at: tick,
+                               ticksPerRow: ticksPerRow, tracks: &tracks)
+
                     var state = tracks[track] ?? TrackStateBox()
                     if cell.instrument != 0 {
                         state.instrument = cell.instrument
@@ -152,7 +172,7 @@ public struct Player {
                     // routine reads the whole cell before sounding the note.
                     if cell.note > 0, let instrument, instrument.isMIDI {
                         startNote(cell: cell, track: track, instrument: instrument,
-                                  block: block, row: row, at: tick, location: location,
+                                  at: tick, location: location,
                                   ticksPerRow: ticksPerRow, ticksPerLine: ticksPerLine,
                                   events: &events, tracks: &tracks)
                     }
@@ -162,6 +182,10 @@ public struct Player {
                 releaseExpired(upTo: tick + ticksPerRow, events: &events, tracks: &tracks)
                 tick += ticksPerRow
             }
+
+            spans.append(BlockSpan(position: position, block: blockNumber, name: label,
+                                   startTick: spanStart, endTick: tick,
+                                   rows: (tick - spanStart) / max(ticksPerRow, 1)))
         }
 
         // Anything still sounding at the end has to be released.
@@ -187,7 +211,7 @@ public struct Player {
                 return a.offset < b.offset
             }
             .map(\.element)
-        return Result(events: events, warnings: warnings, lengthInTicks: tick)
+        return Result(events: events, warnings: warnings, lengthInTicks: tick, spans: spans)
     }
 
     // MARK: - Helpers

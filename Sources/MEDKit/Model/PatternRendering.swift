@@ -24,8 +24,16 @@ public enum PatternRendering {
         return i < digits.count ? String(digits[i]) : "?"
     }
 
+    /// Zeichen für eine Zelle, die nur die Instrumentnummer trägt.
+    ///
+    /// OctaMED zeichnet dafür ein senkrechtes Zeichen in die Notenspalte. Es
+    /// ist keine Verzierung: Jede solche Zeile verlängert die klingende Note
+    /// um eine Zeile, siehe `Player.extendHold(…)`.
+    public static let holdGlyph = " ‖ "
+
     public static func cell(_ z: Cell) -> String {
-        "\(z.noteName) \(instrumentDigit(z.instrument))\(z.command.hex)"
+        let note = z.note == 0 && z.instrument != 0 ? holdGlyph : z.noteName
+        return "\(note) \(instrumentDigit(z.instrument))\(z.command.hex)"
     }
 
     /// Ein Block als Text, wie er in OctaMED auf dem Bildschirm steht.

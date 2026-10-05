@@ -96,13 +96,10 @@ public struct Block: Sendable {
         var r = row + 1
         while r < rows {
             let z = cell(row: r, track: track)
-            guard z.note == 0, z.instrument == instrument, z.command.isEmpty else { break }
-            // Auch die Zusatzseiten müssen leer sein.
-            var leer = true
-            for page in 1..<pageCount where !command(row: r, track: track, page: page).isEmpty {
-                leer = false
-            }
-            guard leer else { break }
+            // Die Abspielroutine prüft **nur**, ob eine Instrumentnummer
+            // dasteht — nicht, ob es dieselbe ist, und nicht, ob die Zelle
+            // befehlsfrei ist. Siehe `Player.extendHold(…)`.
+            guard z.note == 0, z.instrument != 0 else { break }
             n += 1
             r += 1
         }

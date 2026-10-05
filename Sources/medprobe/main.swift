@@ -16,6 +16,7 @@ struct Options {
     var exportFolder: String?
     var events = false
     var midiFolder: String?
+    var blockFolder: String?
     var layout = MIDIExport.TrackLayout.perInstrument
     var embedSysEx = false
     var eventLimit = 60
@@ -40,6 +41,7 @@ while i < args.count {
     case "--export": i += 1; o.exportFolder = args[i]
     case "--events": o.events = true
     case "--midi": i += 1; o.midiFolder = args[i]
+    case "--bloecke": i += 1; o.blockFolder = args[i]
     case "--spuren-nach":
         i += 1
         switch args[i] {
@@ -66,6 +68,10 @@ while i < args.count {
         medprobe --midi <ordner> [--spuren-nach instrument|kanal|medspur]
                         [--mit-sysex] <datei> …
           schreibt eine Standard-MIDI-Datei je Song
+
+        medprobe --bloecke <ordner> [--spuren-nach …] <datei> …
+          schreibt je Eintrag der Songreihenfolge eine eigene MIDI-Datei,
+          dazu bloecke.txt mit den Startpunkten
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -87,6 +93,22 @@ for pfad in o.files {
         song = try MEDLoader.load(file: url)
     } catch {
         print("\(url.lastPathComponent): FEHLER — \(error)")
+        continue
+    }
+
+    if let ordner = o.blockFolder {
+        let basis = (url.lastPathComponent as NSString).deletingPathExtension
+        let ziel = URL(fileURLWithPath: ordner).appendingPathComponent(basis)
+        do {
+            var optionen = MIDIExport.Options()
+            optionen.layout = o.layout
+            optionen.embedSysEx = o.embedSysEx
+            let r = try MIDIExport.writeBlocks(song: song, to: ziel, options: optionen)
+            let noten = r.reduce(0) { $0 + $1.noteCount }
+            print("\(url.lastPathComponent) -> \(basis)/  \(r.count) Dateien, \(noten) Noten")
+        } catch {
+            print("\(url.lastPathComponent): Blockexport fehlgeschlagen — \(error)")
+        }
         continue
     }
 

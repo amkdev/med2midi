@@ -180,3 +180,57 @@ struct SMFReader {
         #expect(daten[0] == daten[1], "\(url.lastPathComponent)")
     }
 }
+
+@Test func holdContinuesThroughCellsCarryingCommands() throws {
+    // Am Original nachgestellt: N_ich_will_neues, Block 2 „intro2a“, Spur 3.
+    // Zeile 0 traegt die Note E-3 mit Instrument 4 (hold 6), die Zeilen 1–11
+    // nur die Instrumentnummer — plus je einen Befehl 31. OctaMED zeichnet
+    // dort die Pipe und haelt die Note; die naechste Note kommt in Zeile 12.
+    //
+    // Der Befehl auf der Haltezeile darf den Hold nicht beenden: die
+    // Abspielroutine prueft nur, ob eine Instrumentnummer dasteht.
+    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let song = try MEDLoader.load(file: url)
+
+    let block = song.blocks[2]
+    #expect(block.name == "intro2a")
+    #expect(block.cell(row: 0, track: 3).note > 0)
+    for row in 1...11 {
+        let cell = block.cell(row: row, track: 3)
+        #expect(cell.note == 0 && cell.instrument == 4, "Zeile \(row)")
+        #expect(!cell.command.isEmpty, "Zeile \(row) sollte einen Befehl tragen")
+    }
+    #expect(block.holdRows(afterRow: 0, track: 3) == 11)
+
+    // Und im Ergebnis: die Note laeuft ueber zwoelf Zeilen.
+    let result = Player(song: song).run()
+    let span = try #require(result.spans.first { $0.block == 2 })
+    let ticksProZeile = Player.ppq / song.rowsPerBeat
+    let start = span.startTick
+    let an = try #require(result.events.first {
+        $0.tick == start && $0.channel == 2 && { if case .noteOn = $0.kind { true } else { false } }($0)
+    })
+    let aus = try #require(result.events.first {
+        $0.tick > start && $0.channel == 2 && { if case .noteOff = $0.kind { true } else { false } }($0)
+    })
+    #expect(aus.tick - an.tick == 12 * ticksProZeile,
+            "\((aus.tick - an.tick) / ticksProZeile) Zeilen statt 12")
+}
+
+@Test func blockExportWritesOneFilePerSequenceEntry() throws {
+    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let song = try MEDLoader.load(file: url)
+    let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("med2midi-bloecke-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: ordner) }
+
+    let ergebnis = try MIDIExport.writeBlocks(song: song, to: ordner)
+    #expect(ergebnis.count == song.playSequences.first?.blocks.count)
+    for block in ergebnis {
+        let reader = try SMFReader(Data(contentsOf: block.url))
+        #expect(reader.format == 1)
+        #expect(reader.division == Player.ppq)
+    }
+    #expect(FileManager.default.fileExists(
+        atPath: ordner.appendingPathComponent("bloecke.txt").path))
+}

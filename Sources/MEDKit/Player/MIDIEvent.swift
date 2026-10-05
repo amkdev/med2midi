@@ -40,6 +40,12 @@ public struct MIDIEvent: Sendable {
         self.source = source
     }
 
+    /// Dasselbe Ereignis an einer anderen Stelle der Zeitachse.
+    public func moved(to tick: Int) -> MIDIEvent {
+        MIDIEvent(tick: tick, channel: channel, kind: kind,
+                  instrument: instrument, source: source)
+    }
+
     /// Sorting rank within one tick: note-offs before note-ons so a repeated
     /// note on the same key does not cut its own successor; meta first.
     var order: Int {

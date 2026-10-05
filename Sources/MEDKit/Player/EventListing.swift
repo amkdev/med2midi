@@ -121,8 +121,5 @@ public enum EventListing {
         }
     }
 
-    static func name(_ midiNote: UInt8) -> String {
-        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        return "\(names[Int(midiNote) % 12])\(Int(midiNote) / 12 - 1)"
-    }
+    static func name(_ midiNote: UInt8) -> String { MIDINote.name(midiNote) }
 }

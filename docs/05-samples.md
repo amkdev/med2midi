@@ -57,7 +57,17 @@ geteilt durch die Periode:
 Geschrieben wird mit der Rate für `C-5` und dem passenden Grundton. `C-3`
 ginge auch, aber 4 kHz sieht in mancher DAW nach einem Fehler aus.
 
-**Grundton** ist die MIDI-Notennummer, die der Bezugsnote entspricht:
+**Grundton** steht als MIDI-Notennummer **und** als Notenname. Die Nummer ist
+eindeutig, der Name hängt von der Zählung ab: Mitte C (Note 60) heißt mal `C3`,
+mal `C4`. Hier gilt `C3` — so zählen Bitwig von Haus aus und MIDI Monitor in
+der Einstellung des Autors. Belegt an seiner Messung: eine als `C-1`
+protokollierte Note trug die Nummer 12.
+
+Die Ereignisliste benannte bis dahin nach `C4` und lag damit gegenüber seinen
+Werkzeugen eine Oktave daneben — die Zahlen stimmten, nur die Namen nicht.
+`MIDINote.name(_:)` ist jetzt die eine Stelle, an der das steht.
+
+Die Nummer errechnet sich als
 `49 + noteOffset + Instrumenttransponierung + Songtransponierung`. Stellt man
 ihn im Sampler ein, klingt jede Note so wie auf dem Amiga — beide Skalen sind
 gleichstufig, der Rest ergibt sich.

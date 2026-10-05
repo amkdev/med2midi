@@ -109,3 +109,33 @@ import Foundation
         #expect(!gibtOrdner, "\(url.lastPathComponent) hat ein samples/ ohne Samples")
     }
 }
+
+@Test func noteNamesFollowTheConventionOfTheAuthorsTools() {
+    // Mitte C ist Note 60 und heisst hier C3 — so zaehlen Bitwig und, in der
+    // Einstellung des Autors, MIDI Monitor. Belegt an seiner Messung: Eine
+    // Note, die MIDI Monitor als C-1 protokollierte, trug die Nummer 12.
+    #expect(MIDINote.name(60) == "C3")
+    #expect(MIDINote.name(12) == "C-1")
+    #expect(MIDINote.name(0) == "C-2")
+    #expect(MIDINote.name(48) == "C2")
+    #expect(MIDINote.name(69) == "A3")        // Kammerton
+    #expect(MIDINote.name(127) == "G8")
+}
+
+@Test func theSampleRootKeyIsReadableAsBothNumberAndName() throws {
+    guard let url = TestFiles.file("2_ENDZEIT_NEW.OMP_WS+MU") else { return }
+    let song = try MEDLoader.load(file: url)
+    let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("med2midi-g-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: ordner) }
+    let infos = try SampleExport.write(song: song, to: ordner)
+
+    for info in infos {
+        #expect(info.rootKey == SampleExport.referenceMEDNote + Player.noteOffset,
+                "\(info.name): Grundton \(info.rootKey)")
+        #expect(info.rootKeyName == MIDINote.name(UInt8(info.rootKey)))
+    }
+    let text = try String(contentsOf: ordner.appendingPathComponent("samples.txt"),
+                          encoding: .utf8)
+    #expect(text.contains("48 C2"))
+}

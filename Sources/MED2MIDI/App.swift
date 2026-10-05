@@ -22,13 +22,11 @@ struct MED2MIDIApp: App {
                 Button("Öffnen …") { store.showOpenPanel() }
                     .keyboardShortcut("o")
                 Divider()
-                Button("Exportieren") { store.exportCurrent() }
+                Button(store.songsToExport.count > 1
+                       ? "\(store.songsToExport.count) Songs exportieren …"
+                       : "Exportieren …") { store.exportSelected() }
                     .keyboardShortcut("e")
-                    .disabled(store.current == nil || store.exporting)
-                Button(store.selection.count > 1
-                       ? "Auswahl exportieren" : "Alle Songs exportieren") { store.exportAll() }
-                    .keyboardShortcut("e", modifiers: [.command, .shift])
-                    .disabled(store.batchSongs.count < 2 || store.exporting)
+                    .disabled(store.songsToExport.isEmpty || store.exporting)
                 Divider()
                 Button(store.selection.count > 1
                        ? "\(store.selection.count) Songs entfernen" : "Song entfernen") {
@@ -329,7 +327,7 @@ struct MainView: View {
     private var exportButton: some View {
         HStack(spacing: 2) {
             Button {
-                store.exportCurrent()
+                store.exportSelected()
             } label: {
                 if let p = store.exportProgress {
                     HStack(spacing: 5) {
@@ -339,7 +337,9 @@ struct MainView: View {
                 } else if store.exporting {
                     ProgressView().controlSize(.small)
                 } else {
-                    Label("Exportieren", systemImage: "square.and.arrow.up")
+                    Label(store.songsToExport.count > 1
+                          ? "\(store.songsToExport.count) exportieren" : "Exportieren",
+                          systemImage: "square.and.arrow.up")
                 }
             }
             .disabled(store.exporting)
@@ -347,16 +347,13 @@ struct MainView: View {
                   ?? "Zielordner wählen und exportieren")
 
             Menu {
-                Button(store.selection.count > 1
-                       ? "Auswahl exportieren (\(store.selection.count))"
-                       : "Alle \(store.songs.count) Songs exportieren") { store.exportAll() }
-                    .disabled(store.batchSongs.count < 2)
                 if let ordner = store.exportFolder {
-                    Divider()
                     Text("Zuletzt: \(ordner.lastPathComponent)")
                     Button("Zuletzt verwendeten Ordner im Finder zeigen") {
                         NSWorkspace.shared.activateFileViewerSelecting([ordner])
                     }
+                } else {
+                    Text("Noch kein Zielordner verwendet")
                 }
             } label: { EmptyView() }
             .menuStyle(.borderlessButton)

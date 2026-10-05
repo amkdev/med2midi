@@ -65,56 +65,108 @@ final class Store {
         UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
     }
 
-    /// Die Songs, die ein Stapelexport erfassen würde: die Auswahl, sobald
-    /// mehr als einer markiert ist, sonst alle geladenen.
-    var batchSongs: [LoadedSong] {
-        selection.count > 1 ? songs.filter { selection.contains($0.id) } : songs
+    /// Die Songs, die ein Export erfasst: **die ausgewählten**.
+    ///
+    /// Ist nichts ausgewählt, der angezeigte. Das ist die übliche Regel auf
+    /// dem Mac — was markiert ist, wird bearbeitet — und sie ersetzt die
+    /// frühere Unterscheidung zwischen „der aktuelle" und „alle".
+    var songsToExport: [LoadedSong] {
+        let gewaehlt = songs.filter { selection.contains($0.id) }
+        if !gewaehlt.isEmpty { return gewaehlt }
+        return current.map { [$0] } ?? []
     }
 
-    /// Exportiert mehrere Songs in denselben Zielordner.
+    /// Exportiert die ausgewählten Songs in einen Zielordner.
     ///
-    /// Die Arbeit läuft neben dem Hauptthread: Bei sieben Dateien dauert sie
+    /// Die Arbeit läuft neben dem Hauptthread: Bei vielen Dateien dauert sie
     /// mehrere Sekunden, und solange soll sich das Fenster weiter bedienen
-    /// lassen.
-    func exportAll() {
-        let liste = batchSongs
+    /// lassen. Ein Fehlschlag bricht den Lauf nicht ab, er steht im Bericht.
+    func exportSelected() {
+        let liste = songsToExport
         guard !liste.isEmpty else { return }
         guard let ordner = chooseFolder() else { return }
+
         exporting = true
-        exportProgress = (0, liste.count)
+        exportProgress = liste.count > 1 ? (0, liste.count) : nil
 
         Task {
             var zeilen: [String] = []
             var fehler = 0
+
             for (i, loaded) in liste.enumerated() {
                 let song = loaded.song
                 let ergebnis = await Task.detached(priority: .userInitiated) {
                     Result { try Export.writeAll(song: song, to: ordner) }
                 }.value
+
                 switch ergebnis {
                 case .success(let r):
-                    var zeile = "\(r.folder.lastPathComponent)/  "
-                        + "\(r.midi.trackCount) Spuren, "
-                        + String(format: "%.1f s", r.midi.seconds)
-                    if let sysEx = r.sysEx { zeile += ", \(sysEx.dumps.count) Dumps" }
-                    if !r.midi.warnings.isEmpty {
-                        zeile += "  (\(r.midi.warnings.count) Hinweise)"
-                    }
-                    zeilen.append(zeile)
+                    zeilen.append(contentsOf: liste.count == 1
+                                  ? Store.detailLines(r)
+                                  : [Store.summaryLine(r)])
                 case .failure(let error):
                     fehler += 1
                     zeilen.append("FEHLER  \(loaded.url.lastPathComponent): \(error)")
                 }
-                exportProgress = (i + 1, liste.count)
+                if liste.count > 1 { exportProgress = (i + 1, liste.count) }
             }
-            zeilen.append("")
-            zeilen.append(fehler == 0
-                          ? "\(liste.count) Songs exportiert."
-                          : "\(liste.count - fehler) von \(liste.count) exportiert, \(fehler) fehlgeschlagen.")
-            exportReport = ExportReport(folder: ordner, lines: zeilen, failed: fehler > 0)
+
+            if liste.count > 1 {
+                zeilen.append("")
+                zeilen.append(fehler == 0
+                    ? "\(liste.count) Songs exportiert."
+                    : "\(liste.count - fehler) von \(liste.count) exportiert, "
+                      + "\(fehler) fehlgeschlagen.")
+            }
+            exportReport = ExportReport(
+                folder: liste.count == 1 ? (try? ergebnisOrdner(liste[0], in: ordner)) ?? ordner
+                                         : ordner,
+                lines: zeilen, failed: fehler > 0)
             exportProgress = nil
             exporting = false
         }
+    }
+
+    /// Der Ordner, in dem ein einzelner Song gelandet ist — damit „Im Finder
+    /// zeigen" direkt dorthin führt und nicht nur ins Zielverzeichnis.
+    private func ergebnisOrdner(_ loaded: LoadedSong, in parent: URL) throws -> URL {
+        let basis = (loaded.song.fileName as NSString).deletingPathExtension
+        return parent.appendingPathComponent(basis.isEmpty ? "song" : basis)
+    }
+
+    private static func groesse(_ url: URL) -> String {
+        let n = (try? Data(contentsOf: url).count) ?? 0
+        return n > 1_000_000 ? String(format: "%.1f MB", Double(n) / 1e6) : "\(n / 1000) kB"
+    }
+
+    /// Ausführlich, wenn nur ein Song exportiert wurde.
+    private static func detailLines(_ r: Export.Result) -> [String] {
+        var zeilen = [
+            "\(r.midi.url.lastPathComponent) — \(r.midi.trackCount) Spuren, "
+                + String(format: "%.1f s, ", r.midi.seconds) + groesse(r.midi.url),
+            "\(r.relieved.url.lastPathComponent) — entzerrte Fassung, "
+                + groesse(r.relieved.url),
+        ]
+        zeilen.append(r.sysEx.map { "sysex/ — \($0.dumps.count) Dumps, dumps.txt, parts.txt" }
+                      ?? "Kein SysEx-Dump in dieser Datei.")
+        if !r.midi.warnings.isEmpty {
+            zeilen.append("")
+            zeilen.append("\(r.midi.warnings.count) Hinweise:")
+            zeilen.append(contentsOf: r.midi.warnings.prefix(6).map { "• " + $0 })
+            if r.midi.warnings.count > 6 {
+                zeilen.append("… \(r.midi.warnings.count - 6) weitere")
+            }
+        }
+        return zeilen
+    }
+
+    /// Eine Zeile je Song, wenn mehrere exportiert wurden.
+    private static func summaryLine(_ r: Export.Result) -> String {
+        var zeile = "\(r.folder.lastPathComponent)/  \(r.midi.trackCount) Spuren, "
+                  + String(format: "%.1f s", r.midi.seconds)
+        if let sysEx = r.sysEx { zeile += ", \(sysEx.dumps.count) Dumps" }
+        if !r.midi.warnings.isEmpty { zeile += "  (\(r.midi.warnings.count) Hinweise)" }
+        return zeile
     }
 
     /// Fragt nach dem Zielordner — jedes Mal.
@@ -129,8 +181,10 @@ final class Store {
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Hierhin exportieren"
-        panel.message = "Zielordner für den Export wählen. "
-                      + "Je Song entsteht darin ein eigener Ordner."
+        panel.message = songsToExport.count > 1
+            ? "Zielordner für \(songsToExport.count) Songs wählen. "
+              + "Je Song entsteht darin ein eigener Ordner."
+            : "Zielordner wählen. Der Song bekommt darin einen eigenen Ordner."
         // Dort aufgehen, wo zuletzt exportiert wurde — über Programmstarts
         // hinweg, als Lesezeichen abgelegt.
         panel.directoryURL = exportFolder
@@ -139,49 +193,6 @@ final class Store {
         return gewaehlt
     }
 
-    /// Fragt nach dem Zielordner, wenn noch keiner gemerkt ist, und exportiert.
-    func exportCurrent() {
-        guard let loaded = current else { return }
-        guard let ordner = chooseFolder() else { return }
-        export(loaded, to: ordner)
-    }
-
-    private func export(_ loaded: LoadedSong, to ordner: URL) {
-        exporting = true
-        let braucht = ordner.startAccessingSecurityScopedResource()
-        defer { if braucht { ordner.stopAccessingSecurityScopedResource() } }
-        do {
-            let r = try Export.writeAll(song: loaded.song, to: ordner)
-            var lines: [String] = []
-            func groesse(_ u: URL) -> String {
-                let n = (try? Data(contentsOf: u).count) ?? 0
-                return n > 1_000_000 ? String(format: "%.1f MB", Double(n) / 1e6)
-                                     : "\(n / 1000) kB"
-            }
-            lines.append("\(r.midi.url.lastPathComponent) — \(r.midi.trackCount) Spuren, "
-                         + String(format: "%.1f s, ", r.midi.seconds) + groesse(r.midi.url))
-            lines.append("\(r.relieved.url.lastPathComponent) — entzerrte Fassung, "
-                         + groesse(r.relieved.url))
-            if let sysEx = r.sysEx {
-                lines.append("sysex/ — \(sysEx.dumps.count) Dumps, dumps.txt, parts.txt")
-            } else {
-                lines.append("Kein SysEx-Dump in dieser Datei.")
-            }
-            if !r.midi.warnings.isEmpty {
-                lines.append("")
-                lines.append("\(r.midi.warnings.count) Hinweise:")
-                lines.append(contentsOf: r.midi.warnings.prefix(6).map { "• " + $0 })
-                if r.midi.warnings.count > 6 {
-                    lines.append("… \(r.midi.warnings.count - 6) weitere")
-                }
-            }
-            exportReport = ExportReport(folder: r.folder, lines: lines, failed: false)
-        } catch {
-            exportReport = ExportReport(folder: ordner,
-                                        lines: ["\(error)"], failed: true)
-        }
-        exporting = false
-    }
 
     var current: LoadedSong? {
         songs.first { selection.contains($0.id) } ?? songs.first

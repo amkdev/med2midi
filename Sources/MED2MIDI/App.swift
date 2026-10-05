@@ -25,11 +25,21 @@ struct MED2MIDIApp: App {
                 Button("Exportieren") { store.exportCurrent() }
                     .keyboardShortcut("e")
                     .disabled(store.current == nil || store.exporting)
-                Button("Alle Songs exportieren") { store.exportAll() }
+                Button(store.selection.count > 1
+                       ? "Auswahl exportieren" : "Alle Songs exportieren") { store.exportAll() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
-                    .disabled(store.songs.count < 2 || store.exporting)
+                    .disabled(store.batchSongs.count < 2 || store.exporting)
                 Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
                     .disabled(store.exporting)
+                Divider()
+                Button(store.selection.count > 1
+                       ? "\(store.selection.count) Songs entfernen" : "Song entfernen") {
+                    store.closeSelected()
+                }
+                .keyboardShortcut(.delete, modifiers: [])
+                .disabled(store.selection.isEmpty)
+                Button("Alle entfernen") { store.closeAll() }
+                    .disabled(store.songs.isEmpty)
             }
             CommandMenu("Navigation") {
                 Button("Nächster Block (Songreihenfolge)") { store.stepInSongOrder(1) }
@@ -174,6 +184,24 @@ struct MainView: View {
 
     private var songList: some View {
         @Bindable var store = store
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Songs").font(.caption.bold()).foregroundStyle(.secondary)
+                Spacer()
+                if store.selection.count > 1 {
+                    Text("\(store.selection.count) ausgewählt")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("\(store.songs.count)").font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            Divider()
+            songTable
+        }
+    }
+
+    private var songTable: some View {
+        @Bindable var store = store
         return List(selection: $store.selection) {
             ForEach(store.songs) { g in
                 VStack(alignment: .leading, spacing: 2) {
@@ -192,11 +220,24 @@ struct MainView: View {
                 }
                 .tag(g.id)
                 .contextMenu {
-                    Button("Schließen") { store.close(g.id) }
+                    // Betrifft die ganze Auswahl, wenn die angeklickte Zeile
+                    // dazugehört — sonst nur diese eine. So verhalten sich
+                    // Listen auf dem Mac überall.
+                    let betroffen: Set<LoadedSong.ID> =
+                        store.selection.contains(g.id) ? store.selection : [g.id]
+                    Button(betroffen.count > 1
+                           ? "\(betroffen.count) Songs entfernen" : "Entfernen") {
+                        store.close(betroffen)
+                    }
+                    Divider()
+                    Button("Im Finder zeigen") {
+                        NSWorkspace.shared.activateFileViewerSelecting([g.url])
+                    }
                 }
             }
         }
-        .onChange(of: store.selection) { _, _ in store.goToSongStart() }
+        .onChange(of: store.current?.id) { _, _ in store.goToSongStart() }
+        .onDeleteCommand { store.closeSelected() }
         .sheet(item: $store.exportReport) { bericht in
             VStack(alignment: .leading, spacing: 14) {
                 Label(bericht.failed ? "Export fehlgeschlagen" : "Export abgeschlossen",
@@ -309,8 +350,10 @@ struct MainView: View {
                   ?? "Zielordner wählen und exportieren")
 
             Menu {
-                Button("Alle \(store.songs.count) Songs exportieren") { store.exportAll() }
-                    .disabled(store.songs.count < 2)
+                Button(store.selection.count > 1
+                       ? "Auswahl exportieren (\(store.selection.count))"
+                       : "Alle \(store.songs.count) Songs exportieren") { store.exportAll() }
+                    .disabled(store.batchSongs.count < 2)
                 Divider()
                 Button("Zielordner wählen …") { store.exportCurrent(askForFolder: true) }
                 if let ordner = store.exportFolder {

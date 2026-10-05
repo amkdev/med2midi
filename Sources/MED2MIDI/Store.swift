@@ -21,7 +21,9 @@ struct Position: Equatable {
 @Observable
 final class Store {
     var songs: [LoadedSong] = []
-    var selection: LoadedSong.ID?
+    /// Auswahl in der Songliste. Mehrfachauswahl, damit sich mehrere auf
+    /// einmal entfernen lassen; angezeigt wird der erste in Listenreihenfolge.
+    var selection: Set<LoadedSong.ID> = []
     var position = Position()
     var errorMessage: String?
     /// Nach Instrument einfärben (Projekt-Prompt, Punkt 2).
@@ -66,16 +68,21 @@ final class Store {
         UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
     }
 
-    /// Exportiert alle geladenen Songs in denselben Zielordner.
+    /// Die Songs, die ein Stapelexport erfassen würde: die Auswahl, sobald
+    /// mehr als einer markiert ist, sonst alle geladenen.
+    var batchSongs: [LoadedSong] {
+        selection.count > 1 ? songs.filter { selection.contains($0.id) } : songs
+    }
+
+    /// Exportiert mehrere Songs in denselben Zielordner.
     ///
     /// Die Arbeit läuft neben dem Hauptthread: Bei sieben Dateien dauert sie
     /// mehrere Sekunden, und solange soll sich das Fenster weiter bedienen
     /// lassen.
     func exportAll(askForFolder: Bool = false) {
-        guard !songs.isEmpty else { return }
+        let liste = batchSongs
+        guard !liste.isEmpty else { return }
         guard let ordner = chooseFolder(ask: askForFolder) else { return }
-
-        let liste = songs
         exporting = true
         exportProgress = (0, liste.count)
 
@@ -175,7 +182,7 @@ final class Store {
     }
 
     var current: LoadedSong? {
-        songs.first { $0.id == selection } ?? songs.first
+        songs.first { selection.contains($0.id) } ?? songs.first
     }
 
     var currentBlock: Block? {
@@ -222,8 +229,8 @@ final class Store {
             do {
                 let song = try MEDLoader.load(file: url)
                 songs.append(LoadedSong(url: url, song: song))
-                if selection == nil {
-                    selection = songs.last?.id
+                if selection.isEmpty {
+                    selection = [songs.last!.id]
                     goToSongStart()
                 }
             } catch {
@@ -251,9 +258,35 @@ final class Store {
     }
 
 
-    func close(_ id: LoadedSong.ID) {
-        songs.removeAll { $0.id == id }
-        if selection == id { selection = songs.first?.id; goToSongStart() }
+    /// Entfernt Songs aus der Liste. Die Dateien bleiben unangetastet —
+    /// MEDKit hat ohnehin keinen Schreibpfad.
+    func close(_ ids: Set<LoadedSong.ID>) {
+        guard !ids.isEmpty else { return }
+        // Was nach dem Entfernen angezeigt wird: der nächste in der Liste,
+        // sonst der vorige. Nichts auszuwählen wäre unnötig unfreundlich.
+        let nachfolger = nextAfterRemoving(ids)
+        songs.removeAll { ids.contains($0.id) }
+        selection = nachfolger.map { [$0] } ?? Set(songs.first.map { [$0.id] } ?? [])
+        goToSongStart()
+    }
+
+    func close(_ id: LoadedSong.ID) { close([id]) }
+
+    /// Entfernt die Auswahl.
+    func closeSelected() { close(selection) }
+
+    func closeAll() {
+        songs.removeAll()
+        selection = []
+        goToSongStart()
+    }
+
+    private func nextAfterRemoving(_ ids: Set<LoadedSong.ID>) -> LoadedSong.ID? {
+        guard let letzter = songs.lastIndex(where: { ids.contains($0.id) }) else { return nil }
+        if let danach = songs[(letzter + 1)...].first { return danach.id }
+        guard let erster = songs.firstIndex(where: { ids.contains($0.id) }), erster > 0
+        else { return nil }
+        return songs[erster - 1].id
     }
 
     // MARK: - Navigation

@@ -16,10 +16,9 @@ struct Options {
     var exportFolder: String?
     var events = false
     var midiFolder: String?
-    var blockFolder: String?
-    var overhang = MIDIExport.BlockOverhang.retrigger
     var layout = MIDIExport.TrackLayout.perInstrument
     var embedSysEx = false
+    var relieveBursts = false
     var eventLimit = 60
 }
 
@@ -42,23 +41,8 @@ while i < args.count {
     case "--export": i += 1; o.exportFolder = args[i]
     case "--events": o.events = true
     case "--midi": i += 1; o.midiFolder = args[i]
-    case "--bloecke": i += 1; o.blockFolder = args[i]
-    case "--ueberhang":
-        i += 1
-        switch args[i] {
-        case "neu-anschlagen": o.overhang = .retrigger
-        case "abschneiden":    o.overhang = .cut
-        default: FileHandle.standardError.write("unbekannt: \(args[i])\n".data(using: .utf8)!)
-        }
-    case "--spuren-nach":
-        i += 1
-        switch args[i] {
-        case "instrument": o.layout = .perInstrument
-        case "kanal":      o.layout = .perChannel
-        case "medspur":    o.layout = .perMEDTrack
-        default: FileHandle.standardError.write("unbekannt: \(args[i])\n".data(using: .utf8)!)
-        }
     case "--mit-sysex": o.embedSysEx = true
+    case "--entzerrt": o.relieveBursts = true
     case "--alle": o.eventLimit = Int.max
     case "--hilfe", "-h":
         print("""
@@ -74,14 +58,10 @@ while i < args.count {
           spielt den Song durch und listet die MIDI-Ereignisse
 
         medprobe --midi <ordner> [--spuren-nach instrument|kanal|medspur]
-                        [--mit-sysex] <datei> …
-          schreibt eine Standard-MIDI-Datei je Song
-
-        medprobe --bloecke <ordner> [--spuren-nach …]
-                           [--ueberhang neu-anschlagen|abschneiden] <datei> …
-          schreibt je Eintrag der Songreihenfolge eine eigene MIDI-Datei,
-          dazu bloecke.txt mit den Startpunkten. Noten ueber Blockgrenzen
-          werden im Folgeblock neu angeschlagen (Vorgabe) oder beendet.
+                        [--mit-sysex] [--entzerrt] <datei> …
+          schreibt eine Standard-MIDI-Datei je Song. --entzerrt zieht
+          Note-Offs und Controller vor den Zeilenanfang, damit die
+          MIDI-Leitung beim Zeilenwechsel nicht ueberlaeuft.
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -106,34 +86,17 @@ for pfad in o.files {
         continue
     }
 
-    if let ordner = o.blockFolder {
-        let basis = (url.lastPathComponent as NSString).deletingPathExtension
-        let ziel = URL(fileURLWithPath: ordner).appendingPathComponent(basis)
-        do {
-            var optionen = MIDIExport.Options()
-            optionen.layout = o.layout
-            optionen.embedSysEx = o.embedSysEx
-            optionen.blockOverhang = o.overhang
-            let r = try MIDIExport.writeBlocks(song: song, to: ziel, options: optionen)
-            let noten = r.reduce(0) { $0 + $1.noteCount }
-            let herein = r.reduce(0) { $0 + $1.carriedIn }
-            print("\(url.lastPathComponent) -> \(basis)/  \(r.count) Dateien, \(noten) Noten"
-                + (herein > 0 ? ", davon \(herein) neu angeschlagen" : ""))
-        } catch {
-            print("\(url.lastPathComponent): Blockexport fehlgeschlagen — \(error)")
-        }
-        continue
-    }
-
     if let ordner = o.midiFolder {
         let basis = (url.lastPathComponent as NSString).deletingPathExtension
-        let ziel = URL(fileURLWithPath: ordner).appendingPathComponent(basis + ".mid")
+        let ziel = URL(fileURLWithPath: ordner)
+            .appendingPathComponent(basis + (o.relieveBursts ? "-entzerrt" : "") + ".mid")
         do {
             try FileManager.default.createDirectory(at: URL(fileURLWithPath: ordner),
                                                     withIntermediateDirectories: true)
             var optionen = MIDIExport.Options()
             optionen.layout = o.layout
             optionen.embedSysEx = o.embedSysEx
+            optionen.relieveBursts = o.relieveBursts
             let r = try MIDIExport.write(song: song, to: ziel, options: optionen)
             let größe = (try? Data(contentsOf: ziel).count) ?? 0
             print("\(url.lastPathComponent) -> \(ziel.lastPathComponent)  "

@@ -219,27 +219,6 @@ struct SMFReader {
             "\((aus.tick - an.tick) / ticksProZeile) Zeilen statt 12")
 }
 
-@Test func blockExportWritesOneFilePerSequenceEntry() throws {
-    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
-    let song = try MEDLoader.load(file: url)
-    let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("med2midi-bloecke-\(UUID().uuidString)")
-    defer { try? FileManager.default.removeItem(at: ordner) }
-
-    let ergebnis = try MIDIExport.writeBlocks(song: song, to: ordner)
-    // Eine Datei je Eintrag der Songreihenfolge — abzueglich der Sendebloecke,
-    // die beim Abspielen uebersprungen werden.
-    let reihenfolge = NoteAnalysis.songOrder(song)
-    let erwartet = reihenfolge.filter { !song.blocks[$0].isSysExSendBlock }.count
-    #expect(ergebnis.count == erwartet)
-    for block in ergebnis {
-        let reader = try SMFReader(Data(contentsOf: block.url))
-        #expect(reader.format == 1)
-        #expect(reader.division == Player.ppq)
-    }
-    #expect(FileManager.default.fileExists(
-        atPath: ordner.appendingPathComponent("bloecke.txt").path))
-}
 
 /// Klingende Gesamtzeit und offen gebliebene Noten einer geschriebenen Datei.
 func soundingTime(_ url: URL) throws -> (ticks: Int, hanging: Int) {
@@ -262,59 +241,7 @@ func soundingTime(_ url: URL) throws -> (ticks: Int, hanging: Int) {
     return (summe, offen.values.reduce(0) { $0 + $1.count })
 }
 
-@Test func blockExportKeepsTheMusicIntact() throws {
-    // Beim Zerlegen in Bloecke darf nichts verlorengehen und nichts
-    // haengenbleiben. Zwei Grenzfaelle gingen hier zunaechst schief:
-    //
-    // 1. Eine Note, deren Note-Off genau auf der Blockgrenze liegt, ist im
-    //    Folgeblock vorbei — sie darf dort nicht neu angeschlagen werden.
-    // 2. Dieselbe Note faellt aus dem gefilterten Bereich des Vorblocks und
-    //    braucht dort ein eigenes Note-Off, sonst bleibt sie haengen.
-    for url in TestFiles.all {
-        let song = try MEDLoader.load(file: url)
-        let ganz = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("med2midi-\(UUID().uuidString).mid")
-        let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("med2midi-bloecke-\(UUID().uuidString)")
-        defer {
-            try? FileManager.default.removeItem(at: ganz)
-            try? FileManager.default.removeItem(at: ordner)
-        }
 
-        try MIDIExport.write(song: song, to: ganz)
-        let bloecke = try MIDIExport.writeBlocks(song: song, to: ordner)
-
-        let gesamt = try soundingTime(ganz)
-        var summe = 0
-        for block in bloecke {
-            let t = try soundingTime(block.url)
-            #expect(t.hanging == 0, "\(block.url.lastPathComponent): \(t.hanging) haengend")
-            summe += t.ticks
-        }
-
-        // Die Summe ueber alle Bloecke muss die Gesamtdatei genau treffen.
-        let befund = "\(url.lastPathComponent): \(gesamt.ticks) gegen \(summe)"
-        #expect(gesamt.ticks == summe, "\(befund)")
-    }
-}
-
-@Test func blockExportCanCutInsteadOfRetriggering() throws {
-    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
-    let song = try MEDLoader.load(file: url)
-    let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("med2midi-schnitt-\(UUID().uuidString)")
-    defer { try? FileManager.default.removeItem(at: ordner) }
-
-    var options = MIDIExport.Options()
-    options.blockOverhang = .cut
-    let bloecke = try MIDIExport.writeBlocks(song: song, to: ordner, options: options)
-
-    #expect(bloecke.allSatisfy { $0.carriedIn == 0 })
-    #expect(bloecke.contains { $0.carriedOut > 0 })
-    for block in bloecke {
-        #expect(try soundingTime(block.url).hanging == 0)
-    }
-}
 
 @Test func sysExSendBlocksAreRecognisedFromTheData() throws {
     // Der Autor hat seine Songs fuer die Live-Darbietung so aufbereitet: Das
@@ -362,4 +289,72 @@ func soundingTime(_ url: URL) throws -> (ticks: Int, hanging: Int) {
     }
     #expect(dumps(mit).count == dumps(ohne).count)
     #expect(dumps(ohne).allSatisfy { $0.tick == 0 })
+}
+
+@Test func burstReliefThinsTheWorstMoments() throws {
+    // Eine DIN-Leitung schafft 3125 Bytes je Sekunde, also 320 us je Byte.
+    // Alles auf demselben Tick geht nacheinander hinaus; der groesste Burst
+    // bestimmt, wie spaet die letzte Note ankommt.
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        func groesserBurst(_ options: MIDIExport.Options) throws -> Int {
+            let ziel = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("med2midi-\(UUID().uuidString).mid")
+            defer { try? FileManager.default.removeItem(at: ziel) }
+            try MIDIExport.write(song: song, to: ziel, options: options)
+            let reader = try SMFReader(Data(contentsOf: ziel))
+            var proTick: [Int: Int] = [:]
+            for event in reader.events {
+                switch event {
+                case .noteOn(let tick, _, _, _): proTick[tick, default: 0] += 3
+                case .noteOff(let tick, _, _):   proTick[tick, default: 0] += 3
+                case .other: break
+                }
+            }
+            return proTick.values.max() ?? 0
+        }
+        var entzerrt = MIDIExport.Options()
+        entzerrt.relieveBursts = true
+
+        let vorher = try groesserBurst(MIDIExport.Options())
+        let nachher = try groesserBurst(entzerrt)
+        let befund = "\(url.lastPathComponent): \(vorher) -> \(nachher) Bytes"
+        #expect(nachher < vorher, "\(befund)")
+    }
+}
+
+@Test func burstReliefKeepsEveryNoteValid() throws {
+    // Kein Note-Off darf vor seinen eigenen Anschlag rutschen, und es darf
+    // keines verlorengehen.
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        var options = MIDIExport.Options()
+        options.relieveBursts = true
+        let ziel = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("med2midi-\(UUID().uuidString).mid")
+        defer { try? FileManager.default.removeItem(at: ziel) }
+        try MIDIExport.write(song: song, to: ziel, options: options)
+
+        let t = try soundingTime(ziel)
+        #expect(t.hanging == 0, "\(url.lastPathComponent): \(t.hanging) haengende Noten")
+
+        // Jede Note muss eine positive Laenge behalten.
+        let reader = try SMFReader(Data(contentsOf: ziel))
+        var offen: [Int: [Int]] = [:]
+        var zuKurz = 0
+        for event in reader.events {
+            switch event {
+            case .noteOn(let tick, let channel, let note, _):
+                offen[channel << 8 | note, default: []].append(tick)
+            case .noteOff(let tick, let channel, let note):
+                let key = channel << 8 | note
+                if var liste = offen[key], !liste.isEmpty {
+                    if tick <= liste.removeFirst() { zuKurz += 1 }
+                    offen[key] = liste
+                }
+            case .other: break
+            }
+        }
+        #expect(zuKurz == 0, "\(url.lastPathComponent): \(zuKurz) Noten ohne Laenge")
+    }
 }

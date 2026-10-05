@@ -482,36 +482,6 @@ geht über getrennte Läufe:
 
     medprobe --midi a songs/* ; medprobe --midi b songs/* ; diff -r a b
 
-## Blockexport: zwei Grenzfälle, die beide schiefgingen
-
-Beim Zerlegen in Blockdateien entscheidet sich an der Blockgrenze zweierlei,
-und es sind **zwei verschiedene Fragen**:
-
-1. **Was reicht in den Folgeblock hinein?** Nur was nach der Grenze noch
-   klingt. Ein Note-Off genau auf der Grenze gehört zum Vorblock — die Note
-   ist im Folgeblock vorbei und darf dort nicht neu angeschlagen werden.
-2. **Was braucht im Vorblock noch ein Note-Off?** Alles, dessen Note-Off nicht
-   mehr in den gefilterten Bereich fällt, **auch das genau auf der Grenze**.
-   Sonst bleibt die Note in der Blockdatei hängen.
-
-Beide Male habe ich die Grenze zuerst falsch gezogen. Mit nur einer Bedingung
-klangen die Blockdateien zusammen **50 % länger** als die Gesamtdatei (Fall 1
-falsch), danach **5–13 % kürzer** bei hängenden Noten (Fall 2 falsch).
-
-Aufgefallen ist beides nur durch die Gegenprobe: Die Summe der klingenden Zeit
-über alle Blockdateien muss die Gesamtdatei treffen, und keine Blockdatei darf
-eine offene Note zurücklassen. Beides steht jetzt als Test über allen sieben
-Dateien.
-
-Das Note-Off am Blockende sitzt genau auf der Grenze, nicht einen Tick davor —
-sonst verliert jede so geschlossene Note einen Tick.
-
-### Wie viele Noten betrifft es überhaupt
-
-Wenige. Nach der Korrektur: 8 in `N_ich_will_neues`, 53 in
-`O_Wie_Eine_Marionette`, sonst 5 bis 22. Der Autor hat weitgehend blockweise
-komponiert. Die zuerst genannten 224 waren Noten, die **genau** auf der
-Blockgrenze enden — also gerade keine Überhänge.
 
 ## Sendeblöcke: das erste Pattern ist keine Musik
 
@@ -545,3 +515,69 @@ ohne die Wartezeit davor — er steht dann auf Tick 0.
 Die drei Dateien ohne Sendeblock lösen ihren Dump überhaupt nicht aus; er liegt
 nur gespeichert in der Datei. Für sie gibt es beim Einbetten
 `sendStoredDumpsAtStart`.
+
+## Die MIDI-Leitung ist der Flaschenhals, nicht der MU80
+
+Der Autor hörte in der DAW Aussetzer, die nach Timing-Problemen klangen, und
+vermutete die Polyphonie des MU80 oder sein Interface. Beides ist messbar
+widerlegt:
+
+- **Polyphonie:** höchstens 19 gleichzeitige Noten über alle sieben Songs,
+  der MU80 hat 64 Stimmen. Hall und Chorus laufen als System-Effekte auf
+  eigenem DSP und verbrauchen keine Stimmen.
+- **Bandbreite im Mittel:** Spitze 468 Byte/s gegen 3125 Byte/s der
+  Schnittstelle — 15 %.
+
+Der Fehler lag in der Messung, nicht im Befund: **Verschmieren entsteht durch
+Bursts, nicht durch Durchschnittslast.** Eine DIN-Leitung überträgt 31250 Baud,
+also 320 µs je Byte. Alles, was auf demselben Tick liegt, geht nacheinander
+hinaus.
+
+| Datei | größter Burst | Verzug | Stellen über 10 ms |
+|---|---|---|---|
+| `final_soverloren.med` | 99 Bytes | 31,7 ms | 606 |
+| `N_ich_will_neues.mmd1` | 87 Bytes | 27,8 ms | 925 |
+| `N_WOISTDAS_MU80.med` | 75 Bytes | 24,0 ms | 690 |
+
+Die letzte Note eines solchen Bündels kommt also fast dreißig Millisekunden zu
+spät.
+
+**Es sind die Noten, nicht die Controller.** Im größten Burst von
+`N_ich_will_neues`: 45 Bytes Note-On, 36 Bytes Note-Off, 6 Bytes Controller.
+Über alle Bursts jenseits von 10 ms machen Controller 13 % aus; bei
+`N_WOISTDAS_MU80` gibt es überhaupt keine und trotzdem 24-ms-Bursts.
+
+Der Amiga hatte dasselbe Problem — dieselben Ereignisse im selben Moment durch
+dieselben 31250 Baud. Das deckt sich mit der Erinnerung des Autors, dass es
+dort „selten, aber es kam vor".
+
+### Was dagegen hilft
+
+`--entzerrt` zieht Note-Offs eine Viertelzeile und Controller eine halbe Zeile
+vor den Zeilenanfang. Der genaue Zeitpunkt eines Note-Offs ist nicht hörbar,
+und ein Filterwert gehört ohnehin **vor** den Anschlag der Note, die er färben
+soll. Die Note-Ons bekommen die Leitung damit für sich:
+
+| Datei | vorher | entzerrt | Stellen über 10 ms |
+|---|---|---|---|
+| `N_ich_will_neues` | 27,8 ms | 14,4 ms | 925 → 175 |
+| `N_WOISTDAS_MU80` | 24,0 ms | 13,4 ms | 690 → 173 |
+| `final_soverloren` | 31,7 ms | 17,3 ms | 606 → 122 |
+| `O_Wie_Eine_Marionette` | 19,2 ms | 7,7 ms | 248 → **0** |
+| `sehnsuchts_blues` | 19,2 ms | 9,6 ms | 149 → **0** |
+| `unsere_hände_spielen` | 21,1 ms | 10,6 ms | 457 → 2 |
+
+Die Zahl der Ereignisse bleibt dabei unverändert — nachgeprüft über alle
+sieben Dateien.
+
+### Verworfen: Export je Pattern
+
+Es gab eine Zeit lang `--bloecke`, das je Eintrag der Songreihenfolge eine
+eigene MIDI-Datei schrieb. Der Autor hat es in Bitwig ausprobiert: Jede Datei
+landet in einer neuen Spur, und die Automation lässt sich so nicht
+zusammenführen. Wieder entfernt.
+
+Das SMF-Format kennt ohnehin keine Clips. Typ 2 ist dafür gedacht
+(„sequentially independent single-track patterns"), wird aber praktisch von
+keiner DAW unterstützt. Marker (`FF 06`) sind das Nächste daran und stehen
+weiterhin in der Datei.

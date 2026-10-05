@@ -100,6 +100,9 @@ for pfad in o.files {
                 + String(format: "%.1f s, ", r.midi.seconds) + "\(groesse(r.midi.url)) B")
             print("   \(r.relieved.url.lastPathComponent)  entzerrt, "
                 + "\(groesse(r.relieved.url)) B")
+            if !r.samples.isEmpty {
+                print("   samples/  \(r.samples.count) WAV-Dateien, samples.txt")
+            }
             if let sysEx = r.sysEx {
                 print("   sysex/  \(sysEx.dumps.count) Dumps, dumps.txt, parts.txt")
                 for d in sysEx.dumps {

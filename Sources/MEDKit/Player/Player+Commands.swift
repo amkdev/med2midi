@@ -25,7 +25,7 @@ extension Player {
                                     instrument: Int(sounding.instrument), source: location))
         }
 
-        let channel = instrument.midiChannel
+        let channel = instrument.isMIDI ? instrument.midiChannel : Player.sampleChannel
         let note = transposed(cell.note, instrument: instrument)
         guard let note else {
             state.sounding = nil

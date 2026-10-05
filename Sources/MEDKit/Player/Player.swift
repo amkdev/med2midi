@@ -207,7 +207,13 @@ public struct Player {
                     // The note itself is played after the row's commands, so a
                     // velocity set in the same cell applies to it. The play
                     // routine reads the whole cell before sounding the note.
-                    if cell.note > 0, let instrument, instrument.isMIDI {
+                    // Auch Sample-Instrumente bekommen Noten. Sie klingen
+                    // nicht über MIDI — der Amiga hat sie selbst erzeugt —,
+                    // aber die Noten sind Musik und gehören in den Export.
+                    // Mit dem Sample aus `samples/` in einem Sampler der DAW
+                    // ergibt die Spur wieder das, was sie war.
+                    if cell.note > 0, let instrument,
+                       instrument.isMIDI || hasSample(instrument) {
                         startNote(cell: cell, track: track, instrument: instrument,
                                   at: tick, location: location,
                                   ticksPerRow: ticksPerRow, ticksPerLine: ticksPerLine,
@@ -270,6 +276,19 @@ public struct Player {
         }
         return instrument.initialMIDIVolume
     }
+
+    /// Ob zu diesem Instrument Sampledaten in der Datei liegen.
+    func hasSample(_ instrument: Instrument) -> Bool {
+        song.samples.contains { $0.instrument == instrument.number && !$0.data.isEmpty }
+    }
+
+    /// Kanal für ein Sample-Instrument.
+    ///
+    /// Sample-Instrumente haben keinen MIDI-Kanal — der Amiga hat sie selbst
+    /// erzeugt. Für die Datei braucht es trotzdem einen, und welcher es ist,
+    /// bedeutet nichts: Jedes Sample-Instrument bekommt eine eigene Spur, und
+    /// die DAW legt je Spur ein Instrument an. Kanal 1 ist die ruhigste Wahl.
+    static let sampleChannel: UInt8 = 1
 
     func instrumentFor(_ number: UInt8) -> Instrument? {
         let index = Int(number) - 1

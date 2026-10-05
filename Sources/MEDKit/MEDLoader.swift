@@ -106,6 +106,7 @@ public enum MEDLoader {
         // structures above 63 in that case!"
         let instrExtUsable = min(instrExtAnzahl, 63)
         var instruments: [Instrument] = []
+        var samples: [Sample] = []
         for i in 0..<instrumentCount {
             let s = songOffset + Layout.Song.sample + i * Layout.Sample.size
             guard r.fits(s, Layout.Sample.size) else { break }
@@ -134,8 +135,28 @@ public enum MEDLoader {
             }
 
             var hatSample = false
-            if let sa = smplarr, r.fits(sa + i * 4, 4) {
-                hatSample = (try r.pointer(sa + i * 4, field: "smplarr[\(i)]")) != nil
+            if let sa = smplarr, r.fits(sa + i * 4, 4),
+               let sp = try r.pointer(sa + i * 4, field: "smplarr[\(i)]") {
+                hatSample = true
+                // Kopf: ULONG length, WORD type — danach die Daten.
+                // Gegengeprüft: Der Abstand zweier Sample-Zeiger ist genau
+                // `length + 6`.
+                let länge = Int(try r.u32(sp))
+                let typ = try r.i16(sp + 4)
+                if länge > 0, r.fits(sp + 6, länge) {
+                    let roh = r.bytes[(sp + 6)..<(sp + 6 + länge)]
+                    // Schleifenpunkte stehen im Songkopf, in Wörtern.
+                    let rep = Int(try r.u16(s + Layout.Sample.rep)) * 2
+                    let replen = Int(try r.u16(s + Layout.Sample.replen)) * 2
+                    let hatSchleife = replen > 2 && rep + replen <= länge
+                    samples.append(Sample(
+                        instrument: i + 1, name: name, type: typ,
+                        data: roh.map { Int8(bitPattern: $0) },
+                        loopStart: hatSchleife ? rep : nil,
+                        loopLength: hatSchleife ? replen : nil,
+                        volume: try r.u8(s + Layout.Sample.svol),
+                        transpose: try r.i8(s + Layout.Sample.strans)))
+                }
             }
 
             instruments.append(Instrument(
@@ -213,7 +234,7 @@ public enum MEDLoader {
             volumeIsHex: volumeIsHex,
             instruments: instruments, blocks: blocks,
             playSequences: playSequences, sections: sections,
-            dumps: dumps, cmd3xControllers: cmd3x, diagnostics: diagnostics)
+            dumps: dumps, samples: samples, cmd3xControllers: cmd3x, diagnostics: diagnostics)
     }
 
     // MARK: - Blöcke

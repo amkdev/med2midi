@@ -276,6 +276,34 @@ public struct SysExDump: Sendable {
     }
 }
 
+/// Ein Sample aus der Songdatei.
+///
+/// Die Daten liegen hinter einem 6 Byte langen Kopf (`ULONG length`, `WORD
+/// type`). Gegengeprüft an `2_ENDZEIT_NEW.OMP_WS+MU`: Der Abstand zwischen
+/// zwei aufeinanderfolgenden Sample-Zeigern ist dort jedes Mal genau
+/// `length + 6`.
+///
+/// Amiga-Samples sind **vorzeichenbehaftet**, −128 bis 127.
+public struct Sample: Sendable {
+    public let instrument: Int          // 1-basiert, wie in der Pattern-Anzeige
+    public let name: String
+    /// `type` aus dem Kopf. 0 = gewöhnliches 8-Bit-Sample.
+    public let type: Int16
+    /// Rohdaten, vorzeichenbehaftet.
+    public let data: [Int8]
+    /// Schleifenanfang in Bytes, oder `nil` für einen Einzelschuss.
+    public let loopStart: Int?
+    /// Schleifenlänge in Bytes.
+    public let loopLength: Int?
+    /// Grundlautstärke des Instruments, 0–64.
+    public let volume: UInt8
+    /// Transponierung des Instruments in Halbtönen.
+    public let transpose: Int8
+
+    public var isPlainEightBit: Bool { type == 0 }
+    public var loops: Bool { loopStart != nil }
+}
+
 public struct PlaySequence: Sendable {
     public let name: String
     public let blocks: [Int]
@@ -311,6 +339,8 @@ public struct Song: Sendable {
     public let playSequences: [PlaySequence]
     public let sections: [Int]
     public let dumps: [SysExDump]
+    /// Samples, die in der Datei liegen. Bei reinen MIDI-Songs leer.
+    public let samples: [Sample]
     /// Controller-Nummern für die Befehle 31–3F, aus `MMDMIDICmd3x`.
     public let cmd3xControllers: [(typ: UInt8, number: UInt16)]
 

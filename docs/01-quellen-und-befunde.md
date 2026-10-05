@@ -481,3 +481,34 @@ und genau dieser Test hätte den Fehler nicht gefunden. Die eigentliche Probe
 geht über getrennte Läufe:
 
     medprobe --midi a songs/* ; medprobe --midi b songs/* ; diff -r a b
+
+## Blockexport: zwei Grenzfälle, die beide schiefgingen
+
+Beim Zerlegen in Blockdateien entscheidet sich an der Blockgrenze zweierlei,
+und es sind **zwei verschiedene Fragen**:
+
+1. **Was reicht in den Folgeblock hinein?** Nur was nach der Grenze noch
+   klingt. Ein Note-Off genau auf der Grenze gehört zum Vorblock — die Note
+   ist im Folgeblock vorbei und darf dort nicht neu angeschlagen werden.
+2. **Was braucht im Vorblock noch ein Note-Off?** Alles, dessen Note-Off nicht
+   mehr in den gefilterten Bereich fällt, **auch das genau auf der Grenze**.
+   Sonst bleibt die Note in der Blockdatei hängen.
+
+Beide Male habe ich die Grenze zuerst falsch gezogen. Mit nur einer Bedingung
+klangen die Blockdateien zusammen **50 % länger** als die Gesamtdatei (Fall 1
+falsch), danach **5–13 % kürzer** bei hängenden Noten (Fall 2 falsch).
+
+Aufgefallen ist beides nur durch die Gegenprobe: Die Summe der klingenden Zeit
+über alle Blockdateien muss die Gesamtdatei treffen, und keine Blockdatei darf
+eine offene Note zurücklassen. Beides steht jetzt als Test über allen sieben
+Dateien.
+
+Das Note-Off am Blockende sitzt genau auf der Grenze, nicht einen Tick davor —
+sonst verliert jede so geschlossene Note einen Tick.
+
+### Wie viele Noten betrifft es überhaupt
+
+Wenige. Nach der Korrektur: 8 in `N_ich_will_neues`, 53 in
+`O_Wie_Eine_Marionette`, sonst 5 bis 22. Der Autor hat weitgehend blockweise
+komponiert. Die zuerst genannten 224 waren Noten, die **genau** auf der
+Blockgrenze enden — also gerade keine Überhänge.

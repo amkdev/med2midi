@@ -5,8 +5,8 @@ import Foundation
 /// Minimal reader, only as far as the tests need: it has to notice when the
 /// writer produces something a DAW would choke on.
 struct SMFReader {
-    enum Event { case noteOn(channel: Int, note: Int, velocity: Int)
-                 case noteOff(channel: Int, note: Int)
+    enum Event { case noteOn(tick: Int, channel: Int, note: Int, velocity: Int)
+                 case noteOff(tick: Int, channel: Int, note: Int)
                  case other }
     var format = 0, trackCount = 0, division = 0
     var events: [Event] = []
@@ -40,8 +40,9 @@ struct SMFReader {
             let end = o + 8 + be32(o + 4)
             o += 8
             var status = 0
+            var tick = 0
             while o < end {
-                _ = varlen(&o)
+                tick += varlen(&o)
                 let b = Int(data[o])
                 if b == 0xFF {
                     let type = Int(data[o + 1]); o += 2
@@ -62,10 +63,11 @@ struct SMFReader {
                     let high = status & 0xF0, channel = status & 0x0F
                     switch high {
                     case 0x90:
-                        events.append(.noteOn(channel: channel, note: Int(data[o]),
+                        events.append(.noteOn(tick: tick, channel: channel, note: Int(data[o]),
                                               velocity: Int(data[o + 1]))); o += 2
                     case 0x80:
-                        events.append(.noteOff(channel: channel, note: Int(data[o]))); o += 2
+                        events.append(.noteOff(tick: tick, channel: channel,
+                                               note: Int(data[o]))); o += 2
                     case 0xA0, 0xB0, 0xE0: events.append(.other); o += 2
                     case 0xC0, 0xD0:       events.append(.other); o += 1
                     default: throw Broken(reason: "unbekannter Status \(status)")
@@ -118,10 +120,10 @@ struct SMFReader {
         var zeroVelocity = 0
         for event in reader.events {
             switch event {
-            case .noteOn(let channel, _, let velocity):
+            case .noteOn(_, let channel, _, let velocity):
                 ons[channel, default: 0] += 1
                 if velocity == 0 { zeroVelocity += 1 }
-            case .noteOff(let channel, _):
+            case .noteOff(_, let channel, _):
                 offs[channel, default: 0] += 1
             case .other: break
             }
@@ -233,4 +235,79 @@ struct SMFReader {
     }
     #expect(FileManager.default.fileExists(
         atPath: ordner.appendingPathComponent("bloecke.txt").path))
+}
+
+/// Klingende Gesamtzeit und offen gebliebene Noten einer geschriebenen Datei.
+func soundingTime(_ url: URL) throws -> (ticks: Int, hanging: Int) {
+    let reader = try SMFReader(Data(contentsOf: url))
+    var offen: [Int: [Int]] = [:]       // Kanal<<8|Note -> Startticks
+    var summe = 0
+    for event in reader.events {
+        switch event {
+        case .noteOn(let tick, let channel, let note, _):
+            offen[channel << 8 | note, default: []].append(tick)
+        case .noteOff(let tick, let channel, let note):
+            let key = channel << 8 | note
+            if var liste = offen[key], !liste.isEmpty {
+                summe += tick - liste.removeFirst()
+                offen[key] = liste
+            }
+        case .other: break
+        }
+    }
+    return (summe, offen.values.reduce(0) { $0 + $1.count })
+}
+
+@Test func blockExportKeepsTheMusicIntact() throws {
+    // Beim Zerlegen in Bloecke darf nichts verlorengehen und nichts
+    // haengenbleiben. Zwei Grenzfaelle gingen hier zunaechst schief:
+    //
+    // 1. Eine Note, deren Note-Off genau auf der Blockgrenze liegt, ist im
+    //    Folgeblock vorbei — sie darf dort nicht neu angeschlagen werden.
+    // 2. Dieselbe Note faellt aus dem gefilterten Bereich des Vorblocks und
+    //    braucht dort ein eigenes Note-Off, sonst bleibt sie haengen.
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        let ganz = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("med2midi-\(UUID().uuidString).mid")
+        let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("med2midi-bloecke-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: ganz)
+            try? FileManager.default.removeItem(at: ordner)
+        }
+
+        try MIDIExport.write(song: song, to: ganz)
+        let bloecke = try MIDIExport.writeBlocks(song: song, to: ordner)
+
+        let gesamt = try soundingTime(ganz)
+        var summe = 0
+        for block in bloecke {
+            let t = try soundingTime(block.url)
+            #expect(t.hanging == 0, "\(block.url.lastPathComponent): \(t.hanging) haengend")
+            summe += t.ticks
+        }
+
+        // Die Summe ueber alle Bloecke muss die Gesamtdatei genau treffen.
+        let befund = "\(url.lastPathComponent): \(gesamt.ticks) gegen \(summe)"
+        #expect(gesamt.ticks == summe, "\(befund)")
+    }
+}
+
+@Test func blockExportCanCutInsteadOfRetriggering() throws {
+    guard let url = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let song = try MEDLoader.load(file: url)
+    let ordner = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("med2midi-schnitt-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: ordner) }
+
+    var options = MIDIExport.Options()
+    options.blockOverhang = .cut
+    let bloecke = try MIDIExport.writeBlocks(song: song, to: ordner, options: options)
+
+    #expect(bloecke.allSatisfy { $0.carriedIn == 0 })
+    #expect(bloecke.contains { $0.carriedOut > 0 })
+    for block in bloecke {
+        #expect(try soundingTime(block.url).hanging == 0)
+    }
 }

@@ -17,6 +17,7 @@ struct Options {
     var events = false
     var midiFolder: String?
     var blockFolder: String?
+    var overhang = MIDIExport.BlockOverhang.retrigger
     var layout = MIDIExport.TrackLayout.perInstrument
     var embedSysEx = false
     var eventLimit = 60
@@ -42,6 +43,13 @@ while i < args.count {
     case "--events": o.events = true
     case "--midi": i += 1; o.midiFolder = args[i]
     case "--bloecke": i += 1; o.blockFolder = args[i]
+    case "--ueberhang":
+        i += 1
+        switch args[i] {
+        case "neu-anschlagen": o.overhang = .retrigger
+        case "abschneiden":    o.overhang = .cut
+        default: FileHandle.standardError.write("unbekannt: \(args[i])\n".data(using: .utf8)!)
+        }
     case "--spuren-nach":
         i += 1
         switch args[i] {
@@ -69,9 +77,11 @@ while i < args.count {
                         [--mit-sysex] <datei> …
           schreibt eine Standard-MIDI-Datei je Song
 
-        medprobe --bloecke <ordner> [--spuren-nach …] <datei> …
+        medprobe --bloecke <ordner> [--spuren-nach …]
+                           [--ueberhang neu-anschlagen|abschneiden] <datei> …
           schreibt je Eintrag der Songreihenfolge eine eigene MIDI-Datei,
-          dazu bloecke.txt mit den Startpunkten
+          dazu bloecke.txt mit den Startpunkten. Noten ueber Blockgrenzen
+          werden im Folgeblock neu angeschlagen (Vorgabe) oder beendet.
         """)
         exit(0)
     default: o.files.append(args[i])
@@ -103,9 +113,12 @@ for pfad in o.files {
             var optionen = MIDIExport.Options()
             optionen.layout = o.layout
             optionen.embedSysEx = o.embedSysEx
+            optionen.blockOverhang = o.overhang
             let r = try MIDIExport.writeBlocks(song: song, to: ziel, options: optionen)
             let noten = r.reduce(0) { $0 + $1.noteCount }
-            print("\(url.lastPathComponent) -> \(basis)/  \(r.count) Dateien, \(noten) Noten")
+            let herein = r.reduce(0) { $0 + $1.carriedIn }
+            print("\(url.lastPathComponent) -> \(basis)/  \(r.count) Dateien, \(noten) Noten"
+                + (herein > 0 ? ", davon \(herein) neu angeschlagen" : ""))
         } catch {
             print("\(url.lastPathComponent): Blockexport fehlgeschlagen — \(error)")
         }

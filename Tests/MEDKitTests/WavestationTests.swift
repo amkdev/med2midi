@@ -73,10 +73,97 @@ import Foundation
     #expect(getroffen >= 7, "\(befund)")
 }
 
-@Test func songsWithoutAWavestationDumpGetNoListing() throws {
+@Test func theListingAppearsOnlyWhereItSaysSomething() throws {
+    // Ohne jeden Dump wissen wir nicht, welches Geraet spielte — dann darf
+    // keine Liste entstehen. Mit einem MU80-Dump koennen wir sagen, welche
+    // Kanaele nicht von ihm kamen, auch ohne Korg-Dump.
     for url in TestFiles.all {
         let song = try MEDLoader.load(file: url)
-        guard !song.dumps.contains(where: { Wavestation.isWavestation($0) }) else { continue }
-        #expect(WavestationListing.text(for: song).isEmpty, "\(url.lastPathComponent)")
+        let text = WavestationListing.text(for: song)
+        if song.dumps.isEmpty {
+            #expect(text.isEmpty, "\(url.lastPathComponent): Liste ohne jeden Dump")
+            continue
+        }
+        let hatKorg = song.dumps.contains { Wavestation.isWavestation($0) }
+        guard !hatKorg else {
+            #expect(!text.isEmpty, "\(url.lastPathComponent): Korg-Dump ohne Liste")
+            continue
+        }
+        // Reiner MU80-Song: Liste nur, wenn ein bespielter Kanal nicht von
+        // ihm bedient wird.
+        let bespielt = DumpChoice.usedChannels(in: song)
+        var vomMU = Set<Int>()
+        if let wahl = DumpChoice.choice(in: song, for: .yamahaXG) {
+            for part in MultiPart.parts(in: wahl.dump)
+            where !part.isFactoryDefault {
+                if let k = part.channel { vomMU.insert(k) }
+            }
+        }
+        let erwartet = !bespielt.subtracting(vomMU).isEmpty
+        #expect(text.isEmpty != erwartet, "\(url.lastPathComponent)")
     }
+}
+
+@Test func theTriggeredDumpWins() throws {
+    // Vier der Dateien schicken genau einen Dump per Befehl 10 ab. Das ist
+    // die Antwort auf die Frage, welcher gilt — und in allen vier Faellen ist
+    // es der letzte seiner Art. Darauf beruht die Annahme fuer die uebrigen.
+    var mitAusloeser = 0
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        let trigger = SysExExport.triggerLocations(in: song)
+        for wahl in DumpChoice.choices(in: song) {
+            if case .triggered = wahl.reason {
+                mitAusloeser += 1
+                #expect(wahl.isCertain)
+                // Der ausgeloeste ist der letzte seiner Art.
+                let gleiche = song.dumps.filter { DumpChoice.device(of: $0) == wahl.device }
+                #expect(gleiche.last?.index == wahl.dump.index,
+                        "\(url.lastPathComponent): ausgeloest ist nicht der letzte")
+                #expect(trigger[wahl.dump.index] != nil)
+            }
+        }
+    }
+    #expect(mitAusloeser >= 4, "nur \(mitAusloeser) Dateien mit Ausloeser")
+}
+
+@Test func partListingOnlyShowsChannelsTheSongPlays() throws {
+    for url in TestFiles.all {
+        let song = try MEDLoader.load(file: url)
+        guard DumpChoice.choice(in: song, for: .yamahaXG) != nil else { continue }
+        let text = PartListing.text(for: song)
+        let bespielt = DumpChoice.usedChannels(in: song)
+
+        // Jede Kanalueberschrift muss zu einem bespielten Kanal gehoeren.
+        for zeile in text.split(separator: "\n") where zeile.hasPrefix("Kanal ") {
+            let teil = zeile.dropFirst(6).prefix { $0.isNumber }
+            guard let kanal = Int(teil) else { continue }
+            let befund = "\(url.lastPathComponent): Kanal \(kanal) steht in parts.txt, "
+                + "wird aber nicht bespielt"
+            #expect(bespielt.contains(kanal), "\(befund)")
+        }
+    }
+}
+
+@Test func factoryDefaultPartsAreRecognised() throws {
+    // 24 der 32 Parts in 2_ENDZEIT_NEW sind unangetastet — das ist das
+    // deutlichste Zeichen dafuer, dass der Klang von woanders kam.
+    guard let url = TestFiles.file("2_ENDZEIT_NEW.OMP_WS+MU") else { return }
+    let song = try MEDLoader.load(file: url)
+    let wahl = try #require(DumpChoice.choice(in: song, for: .yamahaXG))
+    let parts = MultiPart.parts(in: wahl.dump)
+    let werk = parts.filter(\.isFactoryDefault).count
+    #expect(werk == 24, "\(werk) Parts im Werkszustand statt 24")
+
+    // Und bei einem reinen MU80-Song darf kein bespielter Kanal im
+    // Werkszustand stehen — sonst stimmte die Erkennung nicht.
+    guard let andere = TestFiles.file("N_ich_will_neues.mmd1") else { return }
+    let mu = try MEDLoader.load(file: andere)
+    let muWahl = try #require(DumpChoice.choice(in: mu, for: .yamahaXG))
+    let bespielt = DumpChoice.usedChannels(in: mu)
+    let unangetastet = MultiPart.parts(in: muWahl.dump).filter {
+        $0.isFactoryDefault && $0.channel.map(bespielt.contains) == true
+    }
+    #expect(unangetastet.isEmpty,
+            "\(unangetastet.count) bespielte Kanaele im Werkszustand")
 }

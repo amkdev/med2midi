@@ -41,6 +41,20 @@ public enum MultiPart {
 
         public var isDrumPart: Bool { partMode != 0 || bankMSB == 127 }
 
+        /// Ob der Part unangetastet im Werkszustand steht.
+        ///
+        /// XG stellt jeden Part auf Bank 0/0, Programm 1, Lautstärke 100,
+        /// Panorama Mitte, Hall 40, Chorus 0. Steht das alles noch so, hat der
+        /// Autor diesen Part nie eingerichtet — der Klang auf diesem Kanal kam
+        /// dann von einem anderen Gerät oder gar nicht.
+        ///
+        /// In `2_ENDZEIT_NEW` trifft das auf 24 der 32 Parts zu; der Song ist
+        /// im Kern ein Wavestation-Song.
+        public var isFactoryDefault: Bool {
+            bankMSB == 0 && bankLSB == 0 && program == 0 && volume == 100
+                && pan == 0 && reverbSend == 40 && chorusSend == 0
+        }
+
         /// Name aus der GM-Liste, oder die Drum-Setup-Nummer.
         ///
         /// Die XG-Variante (`bankLSB`) ändert den Klang gegenüber GM, behält

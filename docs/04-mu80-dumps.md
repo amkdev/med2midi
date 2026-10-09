@@ -257,3 +257,21 @@ Hersteller bleiben unberührt, dort gilt das Schema nicht.
 Die Originaldateien werden nie verändert; MEDKit hat keinen Schreibpfad auf
 sie. Die Korrektur steckt nur in der exportierten `.syx`, und `dumps.txt` nennt
 jedes geänderte Byte mit Offset, altem und neuem Wert und Begründung.
+
+## Banknummern nennen die XG-Variante — am Gerät bestätigt
+
+In `0_DIESE_WELT.OMP_WS+MU` liegen auf Kanal 4 **zwei** Parts übereinander:
+
+| Part | Bank | Prog | GM-Name | am Gerät |
+|---|---|---|---|---|
+| 4 | 0/16 | 53 | Choir Aahs | **Ch.Aahs2** |
+| 5 | 0/35 | 51 | SynthStrings 1 | **Syn Str3** |
+
+Der Autor hat die rechte Spalte am MU80 abgelesen. Damit ist belegt, wie die
+Angaben zusammenspielen: Der **GM-Name** nennt den Charakter, die
+**Bank-LSB** die XG-Variante. Wer den genauen Namen braucht, schlägt mit
+beiden Zahlen in der „Sound List" nach.
+
+Die Spalte in `wavestation.txt` zeigte zunächst nur den **ersten**
+eingerichteten Part je Kanal und verschwieg den zweiten. Aufgefallen ist das
+nur, weil der Autor am Gerät nachsah. Jetzt stehen alle, mit `+` verbunden.

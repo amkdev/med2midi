@@ -167,3 +167,26 @@ import Foundation
     #expect(unangetastet.isEmpty,
             "\(unangetastet.count) bespielte Kanaele im Werkszustand")
 }
+
+@Test func allConfiguredPartsOnAChannelAreNamed() throws {
+    // Auf einem Kanal koennen mehrere MU80-Parts liegen. Die Spalte zeigte
+    // nur den ersten und verschwieg den zweiten — dem Autor ist es am Geraet
+    // aufgefallen: Kanal 4 spricht dort Ch.Aahs2 und Syn Str3 an.
+    guard let url = TestFiles.file("0_DIESE_WELT.OMP_WS+MU") else { return }
+    let song = try MEDLoader.load(file: url)
+    let wahl = try #require(DumpChoice.choice(in: song, for: .yamahaXG))
+    let aufVier = MultiPart.parts(in: wahl.dump).filter {
+        $0.channel == 4 && !$0.isFactoryDefault
+    }
+    #expect(aufVier.count == 2, "\(aufVier.count) eingerichtete Parts auf Kanal 4")
+
+    // Die Banknummern nennen die XG-Variante: Bank-LSB 16 auf Choir Aahs
+    // heisst am Geraet Ch.Aahs2, LSB 35 auf SynthStrings 1 heisst Syn Str3.
+    #expect(aufVier.contains { $0.voiceName == "Choir Aahs" && $0.bankLSB == 16 })
+    #expect(aufVier.contains { $0.voiceName == "SynthStrings 1" && $0.bankLSB == 35 })
+
+    let text = WavestationListing.text(for: song)
+    let zeile = text.split(separator: "\n").first { $0.hasPrefix("4 ") }
+    let befund = "Kanal-4-Zeile: \(zeile ?? "fehlt")"
+    #expect(zeile?.contains("Choir Aahs + SynthStrings 1") == true, "\(befund)")
+}

@@ -61,9 +61,9 @@ A selection, each measured rather than assumed:
 
 > `docs/` holds about 2 000 lines of findings, and they are written in **German**.
 >
-> They are my working notes, kept in the language I made them in. Translating
-> them would have meant rewriting them, and precision mattered more to me than
-> reach: every claim sits next to the measurement that supports it, and several
+> They are Claude's and my working notes, kept in the language we talked together.
+> Translating it would mean rewriting it, but accuracy is important:
+> every claim sits next to the measurement that supports it, and several
 > of them correct existing references. Rewriting that in a second language
 > invites exactly the kind of quiet drift the documents exist to prevent.
 >

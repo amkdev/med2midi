@@ -110,6 +110,12 @@ anything audible.
 
 Requires macOS and a Swift 6 toolchain. There are no dependencies.
 
+**No binaries are published**, on purpose. An unsigned `.app` is blocked by
+Gatekeeper, and the workaround — stripping the quarantine attribute by hand —
+is a worse first impression than a one-line build. Doing it properly would
+mean notarisation and an Apple developer account, which is not worth it for a
+tool this specialised. Building takes a few seconds.
+
 ```sh
 swift build -c release
 

@@ -6,6 +6,9 @@ __pycache__/
 *.xcuserstate
 xcuserdata/
 
+# Lokale Einstellungen dieser Arbeitsumgebung
+.claude/
+
 # Privates Material und daraus Abgeleitetes
 songs/
 export/

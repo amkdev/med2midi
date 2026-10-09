@@ -10,12 +10,12 @@ SysEx dumps and WAV samples. It is not a tracker and it does not play anything.*
 
 ## What this is, and what it is not
 
-This is a **converter**, written for one person's very specific problem.
+This is a **converter**, written for one very specific problem: mine.
 
-The author composed music on an Amiga between roughly 1995 and 2002, using
-OctaMED with external MIDI gear — a Yamaha MU80 and a Korg Wavestation. The
-songs survived as MMD files. The goal was to get them into a DAW with their
-musical content intact, so they could be re-instrumented with modern sounds.
+I composed music on an Amiga between roughly 1995 and 2002, using OctaMED with
+external MIDI gear — a Yamaha MU80 and a Korg Wavestation. The songs survived
+as MMD files. I wanted them in a DAW with their musical content intact, so I
+could re-instrument them with modern sounds.
 
 Everything here follows from that goal:
 
@@ -34,11 +34,11 @@ They are better at that and always will be.
 ## Why it exists
 
 The MIDI side of the MMD format is poorly documented and, where it is
-documented, partly wrong. Every OctaMED version the author tried exported MIDI
-that lost something: velocities, note lengths, controller streams, or the SysEx
-dumps entirely.
+documented, partly wrong. Every OctaMED version I tried exported MIDI that lost
+something: velocities, note lengths, controller streams, or the SysEx dumps
+entirely.
 
-So the export was rebuilt from the ground up, and **every behaviour was measured
+So I rebuilt the export from the ground up, and **measured every behaviour
 against the original** — on the real hardware, in an Amiga emulator with a MIDI
 monitor, or in OctaMED's own 68k play routine.
 
@@ -63,18 +63,16 @@ A selection, each measured rather than assumed:
 
 > `docs/` holds about 2 000 lines of findings, and they are written in **German**.
 >
-> They are the author's working notes, kept in the language they were made in.
-> Translating them would have meant rewriting them, and precision mattered more
-> than reach: every claim sits next to the measurement that supports it, and
-> several of them correct existing references. Rewriting that in a second
-> language invites exactly the kind of quiet drift the documents exist to
-> prevent.
+> They are my working notes, kept in the language I made them in. Translating
+> them would have meant rewriting them, and precision mattered more to me than
+> reach: every claim sits next to the measurement that supports it, and several
+> of them correct existing references. Rewriting that in a second language
+> invites exactly the kind of quiet drift the documents exist to prevent.
 >
 > The table above is the summary in English. For the detail, machine
 > translation copes well — the vocabulary is technical and the structure is
 > plain. If a specific finding matters to you and the translation is unclear,
-> open an issue and ask; the author would rather explain it than have it
-> misread.
+> open an issue and ask — I would rather explain it than have it misread.
 
 | Document | Contents |
 |---|---|
@@ -142,35 +140,34 @@ their extension — on the Amiga they had none.
 swift test
 ```
 
-76 tests. Those that need real songs skip cleanly when `songs/` is absent; the
-author's material is not part of this repository. Each test that encodes a
-measured behaviour says, in its comment, what was measured and how.
+76 tests. Those that need real songs skip cleanly when `songs/` is absent; my
+own material is not part of this repository. Each test that encodes a measured
+behaviour says, in its comment, what was measured and how.
 
 ## Status and limits
 
-Written for one person's songs, and shaped by them. In particular:
+Written for my songs, and shaped by them. In particular:
 
 - **MIDI instruments are the focus.** Sample instruments get notes and WAV
   files, but synth and hybrid instruments are not interpreted.
 - **Flow control is not modelled.** Commands `0B`, `1D`, `1E`, `1F` and
-  `0F 00` would change the running order; none of them occurs in the author's
-  material, so they are reported as warnings rather than executed.
+  `0F 00` would change the running order; none of them occurs in my material,
+  so they are reported as warnings rather than executed.
 - **Mixing mode is ignored**, along with everything that only affects Paula.
 - Some behaviours are confirmed by a single measurement. Where that is the
   case, the documentation says so.
 
 Interoperability work — corrections for OpenMPT, libxmp or UADE — is welcome,
-and the findings are MIT-licensed precisely so they can be used that way.
+and I licensed the findings under MIT precisely so they can be used that way.
 
 ## A word on the material
 
 The songs themselves are not in this repository, and neither are the exports —
-both are the author's own music. What remains visible are the file names and
-the block names inside them, in the screenshots and in the tests. That is
-deliberate: a finding like *"in `N_ich_will_neues`, block 2, track 3, the
-eleven hold rows each carry a command"* can be checked by anyone holding the
-same file. An anonymised version would read as an assertion rather than a
-measurement.
+it is my own music. What remains visible are the file names and the block names
+inside them, in the screenshots and in the tests. That is deliberate: a finding
+like *"in `N_ich_will_neues`, block 2, track 3, the eleven hold rows each carry
+a command"* can be checked by anyone holding the same file. An anonymised
+version would read as an assertion rather than a measurement.
 
 Tests that need real songs skip cleanly when `songs/` is absent.
 
@@ -182,11 +179,11 @@ Tests that need real songs skip cleanly when `songs/` is absent.
 - OctaMED's own 68k play routine, as shipped with UADE
 - [The OctaMED SoundStudio manual](https://retro.pasz.nl/resources/octamed-soundstudio-manual/),
   Appendix A in particular
-- An Amiga emulator, a MIDI monitor, a Yamaha MU80, and the author's ears
+- An Amiga emulator, a MIDI monitor, a Yamaha MU80, and my own ears
 
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
 
-The original brief that started the project is kept as
+The brief I started from is kept as
 [`med2midi-projekt-prompt.md`](med2midi-projekt-prompt.md), in German.

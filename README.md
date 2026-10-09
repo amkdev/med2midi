@@ -34,9 +34,7 @@ They are better at that and always will be.
 ## Why it exists
 
 The MIDI side of the MMD format is poorly documented and, where it is
-documented, partly wrong. Every OctaMED version I tried exported MIDI that lost
-something: velocities, note lengths, controller streams, or the SysEx dumps
-entirely.
+documented, partly wrong. Every OctaMED version I tried out exported MIDI not satisfactorily.
 
 So I rebuilt the export from the ground up, and **measured every behaviour
 against the original** — on the real hardware, in an Amiga emulator with a MIDI

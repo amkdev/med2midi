@@ -12,8 +12,8 @@ SysEx dumps and WAV samples. It is not a tracker and it does not play anything.*
 
 This is a **converter**, written for one very specific problem: mine.
 
-I composed music on an Amiga between roughly 1995 and 2002, using OctaMED with
-external MIDI gear — a Yamaha MU80 and a Korg Wavestation. The songs survived
+I composed music on an Amiga in the 90s, using OctaMED with external 
+MIDI gear — a Yamaha MU80 and a Korg Wavestation. The songs survived
 as MMD files. I wanted them in a DAW with their musical content intact, so I
 could re-instrument them with modern sounds.
 

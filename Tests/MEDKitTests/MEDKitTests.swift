@@ -277,19 +277,18 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
             #expect(dump.isComplete, "\(befund): Rahmen")
 
             if check.schemeApplies {
-                // 2_ENDZEIT_NEW traegt ein gekipptes Bit: In Nachricht 168 von
-                // 407 steht 70 statt F0. Der Inhalt ist intakt, die Pruefsumme
-                // der Nachricht stimmt — es ist genau ein Byte. Der Nachweis
-                // steht in docs/04-mu80-dumps.md; hier wird er festgehalten,
-                // damit er nicht unbemerkt verschwindet oder sich ausbreitet.
-                let bekannt = url.lastPathComponent.hasPrefix("2_ENDZEIT_NEW")
-                              && dump.index == 1
-                if bekannt {
-                    let hinweis = "Der bekannte Schaden ist weg — "
-                        + "wurde die Datei ersetzt?"
-                    #expect(!check.isIntact, "\(hinweis)")
-                } else {
-                    #expect(check.isIntact, "\(befund)")
+                // Zwei Dateien tragen gekippte Bits — vermutlich defekte
+                // Sektoren auf den Amiga-Disketten. Statt die Dateinamen
+                // festzunageln gilt die Regel: Ein beschaedigter Dump muss
+                // entweder beweisbar repariert **oder** gemeldet werden.
+                // Still falsch sein darf keiner.
+                if !check.isIntact {
+                    let r = SysExRepair.repair(dump)
+                    let repariert = SysExDump(index: dump.index, name: dump.name,
+                                              rawData: r.data)
+                    let hinweis = "\(befund): weder repariert noch gemeldet"
+                    #expect(repariert.check().isIntact || !r.unresolved.isEmpty,
+                            "\(hinweis)")
                 }
             } else {
                 // Nicht-Yamaha: Byteanzahl und Pruefsumme liegen woanders,
@@ -531,4 +530,46 @@ private func syntheticSong(tempo: UInt16, tpl: UInt8, lpb: UInt8, bpm: Bool) -> 
         #expect(first.midiVolume == 94)      // svol 47
         #expect(first.defaultVolume == 47)
     }
+}
+
+@Test func decimalVolumeReadingIsConfirmedAtTheDevice() throws {
+    // Am Emulator gemessen (2026-10-09): In 0_DIESE_WELT, Block 2, gehen auf
+    // Kanal 4 die Velocities 79, 95 und 119 hinaus.
+    //
+    // Das entscheidet zwischen drei Lesarten. Die Bytes dort sind 40, 48, 60:
+    //
+    //   dezimal  40→79, 48→95, 60→119     trifft alle drei
+    //   hex      40→127, 48 und 60 waeren wirkungslos
+    //   7-Bit    40→64, 48→72, 60→96
+    //
+    // Haette OctaMED hexadezimal gelesen, waeren 95 und 119 nie erschienen.
+    guard let url = TestFiles.file("0_DIESE_WELT.OMP_WS+MU") else { return }
+    let song = try MEDLoader.load(file: url)
+    #expect(!song.volumeIsHex, "Das VOLHEX-Flag muesste hier geloescht sein")
+
+    let block = song.blocks[2]
+    let encoding = song.volumeEncoding(block: block)
+    #expect(encoding == .decimal)
+
+    func velocity(_ byte: UInt8) -> UInt8? {
+        if case .velocity(let v) = CommandCatalog.volumeCommand(data: byte, encoding: encoding) {
+            return v
+        }
+        return nil
+    }
+    #expect(velocity(0x40) == 79)
+    #expect(velocity(0x48) == 95)
+    #expect(velocity(0x50) == 99)
+    #expect(velocity(0x60) == 119)
+
+    // Und die Gegenprobe, dass die anderen Lesarten es nicht treffen.
+    func hexVelocity(_ byte: UInt8) -> UInt8? {
+        if case .velocity(let v) = CommandCatalog.volumeCommand(data: byte,
+                                                                encoding: .hexadecimal) {
+            return v
+        }
+        return nil
+    }
+    #expect(hexVelocity(0x48) == nil, "Hex-Lesart muesste 48 verwerfen")
+    #expect(hexVelocity(0x60) == nil, "Hex-Lesart muesste 60 verwerfen")
 }

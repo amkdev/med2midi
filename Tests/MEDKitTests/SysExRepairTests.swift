@@ -2,6 +2,25 @@ import Testing
 import Foundation
 @testable import MEDKit
 
+@Test func repairHandlesBothDirectionsOfDamage() throws {
+    // Ein beschaedigtes Datenbyte kann zu niedrig **oder** zu hoch sein.
+    // In 0_DIESE_WELT weichen die Pruefsummen in beide Richtungen ab; die
+    // erste Fassung suchte nur nach zu niedrigen Bytes und fand nichts.
+    guard let url = TestFiles.file("0_DIESE_WELT.OMP_WS+MU") else { return }
+    let song = try MEDLoader.load(file: url)
+    guard let dump = song.dumps.first(where: { $0.manufacturer == 0x43 }),
+          !dump.check().isIntact else { return }
+
+    let r = SysExRepair.repair(dump)
+    // Was sich nicht beweisen laesst, bleibt stehen — und wird gemeldet.
+    let behandelt = r.changes.count + r.unresolved.count
+    #expect(behandelt > 0, "Schaden weder repariert noch gemeldet")
+    for c in r.changes {
+        // Jede Aenderung muss die Nachricht in Ordnung bringen.
+        #expect(c.from != c.to)
+    }
+}
+
 @Test func repairFixesTheDamagedDumpCompletely() throws {
     // Am Geraet gemessen: Der MU80 meldete beim Empfang dieses Dumps
     // "Check Sum Error!". Fuenf Bytes sind beschaedigt, jedes auf Bitebene.

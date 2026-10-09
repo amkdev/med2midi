@@ -748,3 +748,28 @@ OctaMED zeichnet in die Notenspalte ein senkrechtes Zeichen, wo nur die
 Instrumentnummer steht. `PatternRendering` tat das nicht und zeigte `---` wie
 bei einer leeren Zelle — gerade die Spalte, in der sich Original und Nachbau
 vergleichen lassen. Jetzt steht dort `‖`.
+
+## Die dezimale Lesart, am Gerät bestätigt
+
+**Gemessen am Emulator (2026-10-09).** In `0_DIESE_WELT.OMP_WS+MU`, Block 2,
+gehen auf Kanal 4 die Velocities **79, 95, 99 und 119** hinaus. Die `0C`-Bytes
+dort sind `40`, `48`, `50` und `60`.
+
+| Byte | dezimal | unser Modell | hex wäre | 7-Bit wäre |
+|---|---|---|---|---|
+| `40` | 40 | **79** | 127 | 64 |
+| `48` | 48 | **95** | wirkungslos | 72 |
+| `50` | 50 | **99** | wirkungslos | 80 |
+| `60` | 60 | **119** | wirkungslos | 96 |
+
+Alle vier treffen. Und das Entscheidende: Unter der Hex-Lesart wären drei der
+vier **wirkungslos** gewesen — die Werte 95, 99 und 119 hätte man nie gesehen.
+
+Das war nötig, weil die Datei das `FLAG_VOLHEX` gelöscht hat, ihre Werte aber
+bis `7F` hinaufreichen und Ziffern A–F enthalten. Das sah nach einer
+hexadezimalen Eingabe aus. Der Autor hat in einer 0–127-Skala **gedacht**,
+OctaMED hat aber dezimal **gerechnet**: Alles über 64 blieb folgenlos.
+
+In diesem Song betrifft das 168 von 1976 Lautstärkebefehlen. Die lauten Noten
+klingen laut, weil sie auf die Grundlautstärke zurückfallen — nicht, weil
+`C7F` gewirkt hätte.

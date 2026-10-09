@@ -142,9 +142,12 @@ public enum SysExRepair {
                 unresolved.append(describe(m, "Byteanzahl passt nicht zur Länge"))
                 continue
             }
-            // Um wie viel ist die Summe zu klein?
+            // Um wie viel muss sich die Summe ändern, damit die gespeicherte
+            // Prüfsumme wieder stimmt? Modulo 128 gerechnet, damit es in
+            // beide Richtungen trägt: Ein Datenbyte kann zu niedrig **oder**
+            // zu hoch sein, und beide Fälle kommen im Material vor.
             let fehlend = (Int(checksum(m)) - Int(m[m.endIndex - 2]) + 128) % 128
-            guard fehlend > 0 else { continue }
+            guard fehlend != 0 else { continue }
 
             let adresse = address(span)
             let geschwister = spans.filter { other in
@@ -166,7 +169,8 @@ public enum SysExRepair {
                 let versatz = o - span.start
                 let werte = geschwister.map { bytes[$0.start + versatz] }
                 guard let erster = werte.first, werte.allSatisfy({ $0 == erster }) else { continue }
-                guard bytes[o] != erster, Int(erster) - Int(bytes[o]) == fehlend else { continue }
+                guard bytes[o] != erster,
+                      (Int(erster) - Int(bytes[o]) + 128) % 128 == fehlend else { continue }
                 kandidaten.append((o, erster))
             }
 

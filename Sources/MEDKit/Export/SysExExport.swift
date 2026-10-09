@@ -223,5 +223,13 @@ public enum SysExExport {
         try PartListing.text(for: song)
             .write(to: result.folder.appendingPathComponent("parts.txt"),
                    atomically: true, encoding: .utf8)
+
+        // Wavestation-Dumps tragen ihre Klangnamen im Klartext, wenn man die
+        // Nibble-Verpackung aufmacht. Nur schreiben, wenn es einen gibt.
+        let ws = WavestationListing.text(for: song)
+        if !ws.isEmpty {
+            try ws.write(to: result.folder.appendingPathComponent("wavestation.txt"),
+                         atomically: true, encoding: .utf8)
+        }
     }
 }

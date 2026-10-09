@@ -5,6 +5,9 @@ SysEx dumps and WAV samples. It is not a tracker and it does not play anything.*
 
 ![Pattern view](docs/images/pattern.png)
 
+*The format findings in [`docs/`](docs/) are written in German —
+[see below](#the-documents-are-in-german).*
+
 ## What this is, and what it is not
 
 This is a **converter**, written for one person's very specific problem.
@@ -37,8 +40,7 @@ dumps entirely.
 
 So the export was rebuilt from the ground up, and **every behaviour was measured
 against the original** — on the real hardware, in an Amiga emulator with a MIDI
-monitor, or in OctaMED's own 68k play routine. The findings are in `docs/`, in
-German, with the measurement next to each claim.
+monitor, or in OctaMED's own 68k play routine.
 
 **The documentation is the more valuable part of this repository.** The Swift
 code is replaceable; the findings are not.
@@ -57,9 +59,31 @@ A selection, each measured rather than assumed:
 | OctaMED's period table starts at `per0`; the two rows above it are conditionally assembled | Sample playback rates were two octaves out |
 | MU80 dumps follow the XG multi-part layout; Korg Wavestation dumps are **nibble-packed, low nibble first** | Patch names are readable from both |
 
-Full detail, including the contradictions between Kinnunen's specification,
-OpenMPT and Tutka: [`docs/01-quellen-und-befunde.md`](docs/01-quellen-und-befunde.md)
-and [`docs/02-befehlskatalog.md`](docs/02-befehlskatalog.md).
+### The documents are in German
+
+> `docs/` holds about 2 000 lines of findings, and they are written in **German**.
+>
+> They are the author's working notes, kept in the language they were made in.
+> Translating them would have meant rewriting them, and precision mattered more
+> than reach: every claim sits next to the measurement that supports it, and
+> several of them correct existing references. Rewriting that in a second
+> language invites exactly the kind of quiet drift the documents exist to
+> prevent.
+>
+> The table above is the summary in English. For the detail, machine
+> translation copes well — the vocabulary is technical and the structure is
+> plain. If a specific finding matters to you and the translation is unclear,
+> open an issue and ask; the author would rather explain it than have it
+> misread.
+
+| Document | Contents |
+|---|---|
+| [`01-quellen-und-befunde.md`](docs/01-quellen-und-befunde.md) | Source ranking, contradictions between the references, measurements on real files, the verified timing model |
+| [`02-befehlskatalog.md`](docs/02-befehlskatalog.md) | The command catalogue: what each pattern command does for a MIDI instrument, with five documented errors in Tutka |
+| [`03-testpattern-emulator.md`](docs/03-testpattern-emulator.md) | How each behaviour was measured in the emulator |
+| [`04-mu80-dumps.md`](docs/04-mu80-dumps.md) | Yamaha bulk dump framing, the XG multi-part layout, and a repair for bit rot |
+| [`05-samples.md`](docs/05-samples.md) | Where sample data sits, and OctaMED's period table |
+| [`06-wavestation.md`](docs/06-wavestation.md) | The Korg Wavestation dump, and how its patch names were recovered |
 
 ## What it produces
 
@@ -131,6 +155,18 @@ Written for one person's songs, and shaped by them. In particular:
 
 Interoperability work — corrections for OpenMPT, libxmp or UADE — is welcome,
 and the findings are MIT-licensed precisely so they can be used that way.
+
+## A word on the material
+
+The songs themselves are not in this repository, and neither are the exports —
+both are the author's own music. What remains visible are the file names and
+the block names inside them, in the screenshots and in the tests. That is
+deliberate: a finding like *"in `N_ich_will_neues`, block 2, track 3, the
+eleven hold rows each carry a command"* can be checked by anyone holding the
+same file. An anonymised version would read as an assertion rather than a
+measurement.
+
+Tests that need real songs skip cleanly when `songs/` is absent.
 
 ## Sources
 
